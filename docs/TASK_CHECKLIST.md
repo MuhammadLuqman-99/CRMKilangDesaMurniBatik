@@ -45,13 +45,18 @@
 
 ## Phase 2: IAM Service 🔄 IN PROGRESS
 
-### 2.1 Domain Layer
-- [ ] User entity
-- [ ] Role entity
-- [ ] Permission value object
-- [ ] Tenant aggregate
-- [ ] RefreshToken entity
-- [ ] Domain events
+### 2.1 Domain Layer ✅ COMPLETED
+- [x] User entity (with behaviors, status management, role assignment)
+- [x] Role entity (with permission management, system roles)
+- [x] Permission value object (with PermissionSet, wildcard support)
+- [x] Tenant aggregate (with plan management, settings, trial support)
+- [x] RefreshToken entity (with token rotation, revocation)
+- [x] Domain events (User, Role, Tenant events - 25+ event types)
+- [x] Email value object (validation, normalization)
+- [x] Password value object (policy validation, strength checking)
+- [x] Base types (Entity, AggregateRoot, DomainEvent interfaces)
+- [x] Repository interfaces (User, Role, Tenant, RefreshToken, AuditLog, Outbox)
+- [x] Unit of Work pattern interface
 
 ### 2.2 Application Layer
 - [ ] RegisterUser use case
@@ -315,14 +320,14 @@
 | Phase | Total Tasks | Completed | Progress |
 |-------|-------------|-----------|----------|
 | Phase 1 | 22 | 22 | ✅ 100% |
-| Phase 2 | 30 | 12 | 🔄 40% |
+| Phase 2 | 35 | 23 | 🔄 66% |
 | Phase 3 | 24 | 7 | ⏳ 29% |
 | Phase 4 | 30 | 12 | ⏳ 40% |
 | Phase 5 | 17 | 5 | ⏳ 29% |
 | Phase 6 | 17 | 11 | ⏳ 65% |
 | Phase 7 | 19 | 0 | ⏳ 0% |
 | Phase 8 | 22 | 8 | ⏳ 36% |
-| **Total** | **181** | **77** | **43%** |
+| **Total** | **186** | **88** | **47%** |
 
 ---
 

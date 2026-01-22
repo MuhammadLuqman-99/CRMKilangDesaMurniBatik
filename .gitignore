@@ -1,0 +1,159 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Go workspace file
+go.work
+
+# Build directory
+bin/
+build/
+dist/
+
+# Dependency directories (remove the comment below to include it)
+vendor/
+
+# IDE and editor directories
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+.nyc_output/
+
+# Compiled binary files
+/cmd/iam-service/iam-service
+/cmd/iam-service/iam-service.exe
+/cmd/customer-service/customer-service
+/cmd/customer-service/customer-service.exe
+/cmd/sales-service/sales-service
+/cmd/sales-service/sales-service.exe
+/cmd/notification-service/notification-service
+/cmd/notification-service/notification-service.exe
+/cmd/api-gateway/api-gateway
+/cmd/api-gateway/api-gateway.exe
+
+# Air tmp directory (hot reload)
+tmp/
+.air.toml.tmp
+
+# Test cache
+.testcache/
+
+# Profiling files
+*.prof
+*.pprof
+cpu.out
+mem.out
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Kubernetes secrets
+*-secret.yaml
+*-secrets.yaml
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Cache directories
+.cache/
+__pycache__/
+
+# Node modules (if any frontend)
+node_modules/
+
+# Generated files
+*.gen.go
+*_gen.go
+*.pb.go
+
+# Documentation build
+docs/_build/
+site/
+
+# Mock files
+*_mock.go
+mock_*.go
+mocks/
+
+# Benchmark results
+bench.txt
+benchmarks/
+
+# Debug files
+debug
+debug.exe
+__debug_bin
+
+# Air binary
+.air
+
+# Local configuration overrides
+configs/local/
+*.local.yaml
+*.local.json

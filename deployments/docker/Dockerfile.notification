@@ -1,0 +1,70 @@
+# CRM Kilang Desa Murni Batik - Notification Service Dockerfile
+# ==============================================================
+# Multi-stage build for optimal image size
+
+# ==========================================
+# Stage 1: Build
+# ==========================================
+FROM golang:1.22-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache git ca-certificates tzdata
+
+# Set working directory
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-w -s -X main.Version=$(git describe --tags --always --dirty 2>/dev/null || echo dev) -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -o /app/bin/notification-service \
+    ./cmd/notification-service
+
+# ==========================================
+# Stage 2: Runtime
+# ==========================================
+FROM alpine:3.19
+
+# Install runtime dependencies
+RUN apk add --no-cache ca-certificates tzdata wget
+
+# Create non-root user
+RUN addgroup -g 1000 appgroup && \
+    adduser -u 1000 -G appgroup -s /bin/sh -D appuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /app/bin/notification-service /app/notification-service
+
+# Copy configs (if needed)
+COPY --from=builder /app/configs /app/configs
+
+# Set ownership
+RUN chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
+
+# Expose port
+EXPOSE 8084
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8084/health || exit 1
+
+# Set environment variables
+ENV APP_ENV=production \
+    APP_PORT=8084
+
+# Run the binary
+ENTRYPOINT ["/app/notification-service"]

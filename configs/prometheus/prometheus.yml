@@ -1,0 +1,113 @@
+# CRM Kilang Desa Murni Batik - Prometheus Configuration
+# ======================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'crm-monitor'
+    environment: 'development'
+
+# Alertmanager configuration (for future use)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# Rule files (for future use)
+rule_files:
+  # - "alert_rules.yml"
+  # - "recording_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # IAM Service
+  - job_name: 'iam-service'
+    static_configs:
+      - targets: ['iam-service:8081']
+        labels:
+          service: 'iam'
+          team: 'backend'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Customer Service
+  - job_name: 'customer-service'
+    static_configs:
+      - targets: ['customer-service:8082']
+        labels:
+          service: 'customer'
+          team: 'backend'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Sales Service
+  - job_name: 'sales-service'
+    static_configs:
+      - targets: ['sales-service:8083']
+        labels:
+          service: 'sales'
+          team: 'backend'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Notification Service
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['notification-service:8084']
+        labels:
+          service: 'notification'
+          team: 'backend'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # API Gateway
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:8080']
+        labels:
+          service: 'gateway'
+          team: 'backend'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # PostgreSQL
+  - job_name: 'postgresql'
+    static_configs:
+      - targets: ['postgres:5432']
+        labels:
+          service: 'postgresql'
+          team: 'database'
+
+  # MongoDB
+  - job_name: 'mongodb'
+    static_configs:
+      - targets: ['mongodb:27017']
+        labels:
+          service: 'mongodb'
+          team: 'database'
+
+  # Redis
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+        labels:
+          service: 'redis'
+          team: 'cache'
+
+  # RabbitMQ
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['rabbitmq:15692']
+        labels:
+          service: 'rabbitmq'
+          team: 'messaging'
+    metrics_path: '/metrics'

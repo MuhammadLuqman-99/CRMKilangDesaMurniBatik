@@ -1,0 +1,112 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# Top-most EditorConfig file
+root = true
+
+# Default settings for all files
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Go files
+[*.go]
+indent_style = tab
+indent_size = 4
+
+# Go module files
+[go.mod]
+indent_style = tab
+indent_size = 4
+
+[go.sum]
+indent_style = tab
+indent_size = 4
+
+# YAML files
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# JSON files
+[*.json]
+indent_style = space
+indent_size = 2
+
+# Markdown files
+[*.md]
+trim_trailing_whitespace = false
+indent_style = space
+indent_size = 2
+
+# Makefile
+[Makefile]
+indent_style = tab
+indent_size = 4
+
+# Shell scripts
+[*.sh]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+
+# Batch scripts
+[*.{bat,cmd}]
+end_of_line = crlf
+
+# Docker files
+[Dockerfile*]
+indent_style = space
+indent_size = 4
+
+[docker-compose*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# Protocol Buffers
+[*.proto]
+indent_style = space
+indent_size = 2
+
+# SQL files
+[*.sql]
+indent_style = space
+indent_size = 4
+
+# TOML files
+[*.toml]
+indent_style = space
+indent_size = 2
+
+# HTML files
+[*.html]
+indent_style = space
+indent_size = 2
+
+# CSS files
+[*.css]
+indent_style = space
+indent_size = 2
+
+# JavaScript/TypeScript files (if any frontend)
+[*.{js,jsx,ts,tsx}]
+indent_style = space
+indent_size = 2
+
+# Kubernetes manifests
+[*.{yaml,yml}]
+indent_style = space
+indent_size = 2
+
+# Helm templates
+[templates/*.yaml]
+indent_style = space
+indent_size = 2
+
+# Configuration files
+[configs/**]
+indent_style = space
+indent_size = 2

@@ -1,0 +1,275 @@
+{
+  "rabbit_version": "3.13.0",
+  "users": [
+    {
+      "name": "crm_admin",
+      "password_hash": "crm_rabbit_password",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": ["administrator"]
+    }
+  ],
+  "vhosts": [
+    {
+      "name": "crm_vhost"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "crm_admin",
+      "vhost": "crm_vhost",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "crm.events",
+      "vhost": "crm_vhost",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "crm.events.dlx",
+      "vhost": "crm_vhost",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "crm.commands",
+      "vhost": "crm_vhost",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "iam.events",
+      "vhost": "crm_vhost",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "crm.events.dlx",
+        "x-dead-letter-routing-key": "iam.events.dlq",
+        "x-message-ttl": 604800000
+      }
+    },
+    {
+      "name": "iam.events.dlq",
+      "vhost": "crm_vhost",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "customer.events",
+      "vhost": "crm_vhost",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "crm.events.dlx",
+        "x-dead-letter-routing-key": "customer.events.dlq",
+        "x-message-ttl": 604800000
+      }
+    },
+    {
+      "name": "customer.events.dlq",
+      "vhost": "crm_vhost",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "sales.events",
+      "vhost": "crm_vhost",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "crm.events.dlx",
+        "x-dead-letter-routing-key": "sales.events.dlq",
+        "x-message-ttl": 604800000
+      }
+    },
+    {
+      "name": "sales.events.dlq",
+      "vhost": "crm_vhost",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "notification.events",
+      "vhost": "crm_vhost",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "crm.events.dlx",
+        "x-dead-letter-routing-key": "notification.events.dlq",
+        "x-message-ttl": 604800000
+      }
+    },
+    {
+      "name": "notification.events.dlq",
+      "vhost": "crm_vhost",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "notification.email",
+      "vhost": "crm_vhost",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "crm.events.dlx",
+        "x-dead-letter-routing-key": "notification.email.dlq",
+        "x-message-ttl": 86400000
+      }
+    },
+    {
+      "name": "notification.email.dlq",
+      "vhost": "crm_vhost",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "notification.sms",
+      "vhost": "crm_vhost",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "crm.events.dlx",
+        "x-dead-letter-routing-key": "notification.sms.dlq",
+        "x-message-ttl": 86400000
+      }
+    },
+    {
+      "name": "notification.sms.dlq",
+      "vhost": "crm_vhost",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "crm.events",
+      "vhost": "crm_vhost",
+      "destination": "iam.events",
+      "destination_type": "queue",
+      "routing_key": "iam.#",
+      "arguments": {}
+    },
+    {
+      "source": "crm.events",
+      "vhost": "crm_vhost",
+      "destination": "customer.events",
+      "destination_type": "queue",
+      "routing_key": "customer.#",
+      "arguments": {}
+    },
+    {
+      "source": "crm.events",
+      "vhost": "crm_vhost",
+      "destination": "sales.events",
+      "destination_type": "queue",
+      "routing_key": "sales.#",
+      "arguments": {}
+    },
+    {
+      "source": "crm.events",
+      "vhost": "crm_vhost",
+      "destination": "notification.events",
+      "destination_type": "queue",
+      "routing_key": "notification.#",
+      "arguments": {}
+    },
+    {
+      "source": "crm.events",
+      "vhost": "crm_vhost",
+      "destination": "notification.email",
+      "destination_type": "queue",
+      "routing_key": "*.email.send",
+      "arguments": {}
+    },
+    {
+      "source": "crm.events",
+      "vhost": "crm_vhost",
+      "destination": "notification.sms",
+      "destination_type": "queue",
+      "routing_key": "*.sms.send",
+      "arguments": {}
+    },
+    {
+      "source": "crm.events.dlx",
+      "vhost": "crm_vhost",
+      "destination": "iam.events.dlq",
+      "destination_type": "queue",
+      "routing_key": "iam.events.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "crm.events.dlx",
+      "vhost": "crm_vhost",
+      "destination": "customer.events.dlq",
+      "destination_type": "queue",
+      "routing_key": "customer.events.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "crm.events.dlx",
+      "vhost": "crm_vhost",
+      "destination": "sales.events.dlq",
+      "destination_type": "queue",
+      "routing_key": "sales.events.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "crm.events.dlx",
+      "vhost": "crm_vhost",
+      "destination": "notification.events.dlq",
+      "destination_type": "queue",
+      "routing_key": "notification.events.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "crm.events.dlx",
+      "vhost": "crm_vhost",
+      "destination": "notification.email.dlq",
+      "destination_type": "queue",
+      "routing_key": "notification.email.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "crm.events.dlx",
+      "vhost": "crm_vhost",
+      "destination": "notification.sms.dlq",
+      "destination_type": "queue",
+      "routing_key": "notification.sms.dlq",
+      "arguments": {}
+    }
+  ],
+  "policies": [
+    {
+      "vhost": "crm_vhost",
+      "name": "ha-all",
+      "pattern": ".*",
+      "definition": {
+        "ha-mode": "all",
+        "ha-sync-mode": "automatic"
+      },
+      "priority": 0,
+      "apply-to": "queues"
+    }
+  ]
+}

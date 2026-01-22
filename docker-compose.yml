@@ -1,0 +1,468 @@
+version: '3.8'
+
+# CRM Kilang Desa Murni Batik - Docker Compose
+# ============================================
+# Development environment with all required services
+
+services:
+  # ==========================================
+  # DATABASES
+  # ==========================================
+
+  # PostgreSQL for IAM and Sales services
+  postgres:
+    image: postgres:16-alpine
+    container_name: crm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crm_admin
+      POSTGRES_PASSWORD: crm_secret_password
+      POSTGRES_DB: crm_main
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm_admin -d crm_main"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crm-network
+
+  # MongoDB for Customer/Contact service
+  mongodb:
+    image: mongo:7.0
+    container_name: crm-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: crm_admin
+      MONGO_INITDB_ROOT_PASSWORD: crm_secret_password
+      MONGO_INITDB_DATABASE: crm_customers
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./scripts/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crm-network
+
+  # Redis for caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: crm-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass crm_redis_password
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "crm_redis_password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crm-network
+
+  # ==========================================
+  # MESSAGE BROKER
+  # ==========================================
+
+  # RabbitMQ for event-driven communication
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: crm-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: crm_admin
+      RABBITMQ_DEFAULT_PASS: crm_rabbit_password
+      RABBITMQ_DEFAULT_VHOST: crm_vhost
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./configs/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./configs/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - crm-network
+
+  # ==========================================
+  # OBSERVABILITY
+  # ==========================================
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.53
+    container_name: crm-jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_ZIPKIN_HOST_PORT: ":9411"
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "5775:5775/udp"   # Accept zipkin.thrift over compact thrift protocol
+      - "6831:6831/udp"   # Accept jaeger.thrift over compact thrift protocol
+      - "6832:6832/udp"   # Accept jaeger.thrift over binary thrift protocol
+      - "5778:5778"       # Serve configs
+      - "16686:16686"     # Jaeger UI
+      - "14250:14250"     # Accept model.proto
+      - "14268:14268"     # Accept jaeger.thrift directly from clients
+      - "14269:14269"     # Admin port: health check
+      - "4317:4317"       # OTLP gRPC receiver
+      - "4318:4318"       # OTLP HTTP receiver
+      - "9411:9411"       # Zipkin compatible endpoint
+    networks:
+      - crm-network
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: crm-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - crm-network
+    depends_on:
+      - iam-service
+      - customer-service
+      - sales-service
+      - notification-service
+      - api-gateway
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: crm-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: crm_grafana_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: "http://localhost:3000"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./configs/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - crm-network
+    depends_on:
+      - prometheus
+      - jaeger
+
+  # ==========================================
+  # APPLICATION SERVICES
+  # ==========================================
+
+  # IAM Service
+  iam-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.iam
+    container_name: crm-iam-service
+    restart: unless-stopped
+    environment:
+      - APP_ENV=development
+      - APP_PORT=8081
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=crm_admin
+      - DB_PASSWORD=crm_secret_password
+      - DB_NAME=crm_iam
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=crm_redis_password
+      - RABBITMQ_URL=amqp://crm_admin:crm_rabbit_password@rabbitmq:5672/crm_vhost
+      - JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - JWT_EXPIRY=24h
+      - JWT_REFRESH_EXPIRY=168h
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./configs:/app/configs:ro
+    networks:
+      - crm-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Customer Service
+  customer-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.customer
+    container_name: crm-customer-service
+    restart: unless-stopped
+    environment:
+      - APP_ENV=development
+      - APP_PORT=8082
+      - MONGODB_URI=mongodb://crm_admin:crm_secret_password@mongodb:27017/crm_customers?authSource=admin
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=crm_redis_password
+      - RABBITMQ_URL=amqp://crm_admin:crm_rabbit_password@rabbitmq:5672/crm_vhost
+      - JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+      - IAM_SERVICE_URL=http://iam-service:8081
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./configs:/app/configs:ro
+    networks:
+      - crm-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      iam-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Sales Service
+  sales-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.sales
+    container_name: crm-sales-service
+    restart: unless-stopped
+    environment:
+      - APP_ENV=development
+      - APP_PORT=8083
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=crm_admin
+      - DB_PASSWORD=crm_secret_password
+      - DB_NAME=crm_sales
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=crm_redis_password
+      - RABBITMQ_URL=amqp://crm_admin:crm_rabbit_password@rabbitmq:5672/crm_vhost
+      - JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+      - IAM_SERVICE_URL=http://iam-service:8081
+      - CUSTOMER_SERVICE_URL=http://customer-service:8082
+    ports:
+      - "8083:8083"
+    volumes:
+      - ./configs:/app/configs:ro
+    networks:
+      - crm-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      iam-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.notification
+    container_name: crm-notification-service
+    restart: unless-stopped
+    environment:
+      - APP_ENV=development
+      - APP_PORT=8084
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=crm_admin
+      - DB_PASSWORD=crm_secret_password
+      - DB_NAME=crm_notification
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=crm_redis_password
+      - RABBITMQ_URL=amqp://crm_admin:crm_rabbit_password@rabbitmq:5672/crm_vhost
+      - JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - SMTP_FROM=noreply@crm.local
+    ports:
+      - "8084:8084"
+    volumes:
+      - ./configs:/app/configs:ro
+    networks:
+      - crm-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.gateway
+    container_name: crm-api-gateway
+    restart: unless-stopped
+    environment:
+      - APP_ENV=development
+      - APP_PORT=8080
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=crm_redis_password
+      - JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+      - IAM_SERVICE_URL=http://iam-service:8081
+      - CUSTOMER_SERVICE_URL=http://customer-service:8082
+      - SALES_SERVICE_URL=http://sales-service:8083
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8084
+      - RATE_LIMIT_REQUESTS=100
+      - RATE_LIMIT_DURATION=1m
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./configs:/app/configs:ro
+    networks:
+      - crm-network
+    depends_on:
+      iam-service:
+        condition: service_healthy
+      customer-service:
+        condition: service_healthy
+      sales-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ==========================================
+  # DEVELOPMENT TOOLS
+  # ==========================================
+
+  # MailHog for email testing
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: crm-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    networks:
+      - crm-network
+
+  # Adminer for database management
+  adminer:
+    image: adminer:4.8.1
+    container_name: crm-adminer
+    restart: unless-stopped
+    ports:
+      - "8088:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    networks:
+      - crm-network
+    depends_on:
+      - postgres
+
+  # Mongo Express for MongoDB management
+  mongo-express:
+    image: mongo-express:1.0.2-20-alpine3.19
+    container_name: crm-mongo-express
+    restart: unless-stopped
+    ports:
+      - "8089:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: crm_admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: crm_secret_password
+      ME_CONFIG_MONGODB_URL: mongodb://crm_admin:crm_secret_password@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+    networks:
+      - crm-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+# ==========================================
+# NETWORKS
+# ==========================================
+
+networks:
+  crm-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ==========================================
+# VOLUMES
+# ==========================================
+
+volumes:
+  postgres_data:
+    driver: local
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

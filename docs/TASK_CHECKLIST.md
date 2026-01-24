@@ -58,13 +58,22 @@
 - [x] Repository interfaces (User, Role, Tenant, RefreshToken, AuditLog, Outbox)
 - [x] Unit of Work pattern interface
 
-### 2.2 Application Layer
-- [ ] RegisterUser use case
-- [ ] AuthenticateUser use case
-- [ ] RefreshToken use case
-- [ ] AssignRole use case
-- [ ] CreateTenant use case
-- [ ] ValidatePermission use case
+### 2.2 Application Layer ✅ COMPLETED
+- [x] RegisterUser use case (with email verification, token generation)
+- [x] AuthenticateUser use case (with rate limiting, session management)
+- [x] RefreshToken use case (with token rotation, reuse detection)
+- [x] AssignRole/RemoveRole use cases
+- [x] CreateTenant use case (with admin user creation)
+- [x] ValidatePermission/Authorize use cases
+- [x] GetUser/ListUsers use cases (with pagination, filtering)
+- [x] UpdateUser/DeleteUser/SuspendUser use cases
+- [x] ChangePassword/VerifyEmail use cases
+- [x] Role CRUD use cases (Create, Update, Delete, List)
+- [x] Tenant management use cases (Settings, Plan, Activate, Suspend)
+- [x] DTOs for all entities (User, Role, Tenant, Pagination)
+- [x] Application error handling with codes
+- [x] Port interfaces (PasswordHasher, TokenService, EmailService, etc.)
+- [x] Entity to DTO mappers
 
 ### 2.3 Infrastructure Layer
 - [x] PostgreSQL UserRepository (interface defined)
@@ -320,14 +329,14 @@
 | Phase | Total Tasks | Completed | Progress |
 |-------|-------------|-----------|----------|
 | Phase 1 | 22 | 22 | ✅ 100% |
-| Phase 2 | 35 | 23 | 🔄 66% |
+| Phase 2 | 44 | 38 | 🔄 86% |
 | Phase 3 | 24 | 7 | ⏳ 29% |
 | Phase 4 | 30 | 12 | ⏳ 40% |
 | Phase 5 | 17 | 5 | ⏳ 29% |
 | Phase 6 | 17 | 11 | ⏳ 65% |
 | Phase 7 | 19 | 0 | ⏳ 0% |
 | Phase 8 | 22 | 8 | ⏳ 36% |
-| **Total** | **186** | **88** | **47%** |
+| **Total** | **195** | **103** | **53%** |
 
 ---
 

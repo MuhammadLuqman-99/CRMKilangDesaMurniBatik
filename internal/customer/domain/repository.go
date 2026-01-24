@@ -156,17 +156,29 @@ type ContactRepository interface {
 
 // ContactFilter defines filtering options for contact queries.
 type ContactFilter struct {
-	TenantID    *uuid.UUID      `json:"tenant_id,omitempty"`
-	CustomerIDs []uuid.UUID     `json:"customer_ids,omitempty"`
-	Statuses    []ContactStatus `json:"statuses,omitempty"`
-	Roles       []ContactRole   `json:"roles,omitempty"`
-	IsPrimary   *bool           `json:"is_primary,omitempty"`
-	Tags        []string        `json:"tags,omitempty"`
-	Query       string          `json:"query,omitempty"`
-	Offset      int             `json:"offset"`
-	Limit       int             `json:"limit"`
-	SortBy      string          `json:"sort_by,omitempty"`
-	SortOrder   string          `json:"sort_order,omitempty"`
+	TenantID            *uuid.UUID      `json:"tenant_id,omitempty"`
+	CustomerID          *uuid.UUID      `json:"customer_id,omitempty"`
+	CustomerIDs         []uuid.UUID     `json:"customer_ids,omitempty"`
+	Statuses            []ContactStatus `json:"statuses,omitempty"`
+	Roles               []ContactRole   `json:"roles,omitempty"`
+	IsPrimary           *bool           `json:"is_primary,omitempty"`
+	HasEmail            *bool           `json:"has_email,omitempty"`
+	HasPhone            *bool           `json:"has_phone,omitempty"`
+	OptedInMarketing    *bool           `json:"opted_in_marketing,omitempty"`
+	Tags                []string        `json:"tags,omitempty"`
+	MinEngagement       *int            `json:"min_engagement,omitempty"`
+	MaxEngagement       *int            `json:"max_engagement,omitempty"`
+	NeedsFollowUp       *bool           `json:"needs_follow_up,omitempty"`
+	CreatedAfter        *time.Time      `json:"created_after,omitempty"`
+	CreatedBefore       *time.Time      `json:"created_before,omitempty"`
+	LastContactedAfter  *time.Time      `json:"last_contacted_after,omitempty"`
+	LastContactedBefore *time.Time      `json:"last_contacted_before,omitempty"`
+	IncludeDeleted      bool            `json:"include_deleted,omitempty"`
+	Query               string          `json:"query,omitempty"`
+	Offset              int             `json:"offset"`
+	Limit               int             `json:"limit"`
+	SortBy              string          `json:"sort_by,omitempty"`
+	SortOrder           string          `json:"sort_order,omitempty"`
 }
 
 // ContactList represents a paginated list of contacts.
@@ -488,4 +500,62 @@ type UnitOfWork interface {
 
 	// Outbox returns the outbox repository.
 	Outbox() OutboxRepository
+
+	// Imports returns the import repository.
+	Imports() ImportRepository
+}
+
+// ContactActivity represents a contact activity.
+type ContactActivity struct {
+	ID          uuid.UUID              `json:"id" bson:"_id"`
+	ContactID   uuid.UUID              `json:"contact_id" bson:"contact_id"`
+	Type        string                 `json:"type" bson:"type"`
+	Description string                 `json:"description" bson:"description"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
+	PerformedBy *uuid.UUID             `json:"performed_by,omitempty" bson:"performed_by,omitempty"`
+	PerformedAt time.Time              `json:"performed_at" bson:"performed_at"`
+}
+
+// ContactStats represents statistics about contacts.
+type ContactStats struct {
+	TotalContacts          int               `json:"total_contacts"`
+	ActiveContacts         int               `json:"active_contacts"`
+	InactiveContacts       int               `json:"inactive_contacts"`
+	BlockedContacts        int               `json:"blocked_contacts"`
+	PrimaryContacts        int               `json:"primary_contacts"`
+	MarketingOptInCount    int               `json:"marketing_opt_in_count"`
+	MarketingOptOutCount   int               `json:"marketing_opt_out_count"`
+	AvgEngagementScore     float64           `json:"avg_engagement_score"`
+	ContactsNeedingFollowUp int              `json:"contacts_needing_follow_up"`
+	RoleDistribution       map[string]int    `json:"role_distribution"`
+	DepartmentDistribution map[string]int    `json:"department_distribution"`
+	LastCalculatedAt       time.Time         `json:"last_calculated_at"`
+}
+
+// DuplicateContactMatch represents a potential duplicate contact match.
+type DuplicateContactMatch struct {
+	Contact     *Contact `json:"contact"`
+	Score       float64  `json:"score"`
+	MatchFields []string `json:"match_fields"`
+	Reason      string   `json:"reason"`
+}
+
+// ContactImportResult represents the result of a contact import operation.
+type ContactImportResult struct {
+	TotalRows    int                      `json:"total_rows"`
+	SuccessCount int                      `json:"success_count"`
+	FailureCount int                      `json:"failure_count"`
+	SkippedCount int                      `json:"skipped_count"`
+	UpdatedCount int                      `json:"updated_count"`
+	Results      []ContactImportRowResult `json:"results"`
+	Errors       []string                 `json:"errors"`
+}
+
+// ContactImportRowResult represents the result of importing a single contact row.
+type ContactImportRowResult struct {
+	Row       int        `json:"row"`
+	Success   bool       `json:"success"`
+	ContactID *uuid.UUID `json:"contact_id,omitempty"`
+	Errors    []string   `json:"errors,omitempty"`
+	Warnings  []string   `json:"warnings,omitempty"`
 }

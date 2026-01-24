@@ -146,14 +146,18 @@
 - [x] Domain events (20+ event types: created, updated, converted, churned, etc.)
 - [x] Business invariants (max contacts, primary contact required, duplicate detection)
 
-### 3.2 Application Layer
-- [ ] CreateCustomer use case
-- [ ] UpdateCustomer use case
-- [ ] DeleteCustomer use case
-- [ ] AddContact use case
-- [ ] SearchCustomers use case
-- [ ] ImportCustomers use case
-- [ ] ExportCustomers use case
+### 3.2 Application Layer ✅ COMPLETED
+- [x] CreateCustomer use case (with duplicate detection, code generation, contact creation)
+- [x] UpdateCustomer use case (with optimistic locking, status change, owner assignment)
+- [x] DeleteCustomer use case (soft/hard delete, bulk delete, deletion checks)
+- [x] AddContact use case (with UpdateContact, DeleteContact, SetPrimary)
+- [x] SearchCustomers use case (full-text search, filters, pagination)
+- [x] ImportCustomers use case (CSV/XLSX/JSON, batch processing, validation)
+- [x] ExportCustomers use case (multiple formats, field selection, streaming)
+- [x] DTOs for Customer and Contact (comprehensive request/response DTOs)
+- [x] Port interfaces (EventPublisher, SearchIndex, Cache, FileStorage, etc.)
+- [x] Entity to DTO mappers (Customer and Contact mappers)
+- [x] Application error handling with codes
 
 ### 3.3 Infrastructure Layer
 - [x] MongoDB CustomerRepository (connection ready)
@@ -363,13 +367,13 @@
 |-------|-------------|-----------|----------|
 | Phase 1 | 22 | 22 | ✅ 100% |
 | Phase 2 | 68 | 68 | ✅ 100% |
-| Phase 3 | 24 | 15 | 🔄 63% |
+| Phase 3 | 29 | 26 | 🔄 90% |
 | Phase 4 | 30 | 12 | ⏳ 40% |
 | Phase 5 | 17 | 5 | ⏳ 29% |
 | Phase 6 | 17 | 11 | ⏳ 65% |
 | Phase 7 | 19 | 0 | ⏳ 0% |
 | Phase 8 | 22 | 8 | ⏳ 36% |
-| **Total** | **219** | **141** | **64%** |
+| **Total** | **224** | **152** | **68%** |
 
 ---
 

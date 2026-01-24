@@ -43,6 +43,7 @@ var (
 
 	// Segment errors
 	ErrSegmentNotFound           = errors.New("segment not found")
+	ErrSegmentAlreadyExists      = errors.New("segment already exists")
 	ErrInvalidSegmentCriteria    = errors.New("invalid segment criteria")
 
 	// Note errors
@@ -55,6 +56,7 @@ var (
 
 	// Import/Export errors
 	ErrImportFailed              = errors.New("import failed")
+	ErrImportNotFound            = errors.New("import not found")
 	ErrExportFailed              = errors.New("export failed")
 	ErrInvalidImportFormat       = errors.New("invalid import format")
 	ErrImportValidationFailed    = errors.New("import validation failed")
@@ -63,6 +65,7 @@ var (
 	ErrInvalidTenantID           = errors.New("invalid tenant ID")
 	ErrUnauthorized              = errors.New("unauthorized access")
 	ErrForbidden                 = errors.New("forbidden action")
+	ErrVersionConflict           = errors.New("version conflict - concurrent modification detected")
 )
 
 // ValidationError represents a validation error with field details.

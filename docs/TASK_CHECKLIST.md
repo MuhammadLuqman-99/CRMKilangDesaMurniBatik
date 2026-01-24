@@ -134,7 +134,7 @@
 
 ---
 
-## Phase 3: Customer/Contact Service 🔄 IN PROGRESS
+## Phase 3: Customer/Contact Service ✅ COMPLETED
 
 ### 3.1 Domain Layer ✅ COMPLETED
 - [x] Customer aggregate (with status, tier, owner, segments, financials, preferences)
@@ -145,6 +145,10 @@
 - [x] SocialProfile value object (with platform-specific URL validation)
 - [x] Domain events (20+ event types: created, updated, converted, churned, etc.)
 - [x] Business invariants (max contacts, primary contact required, duplicate detection)
+- [x] Customer segments (static and dynamic)
+- [x] Customer notes with pinning
+- [x] Customer activities tracking
+- [x] Import status tracking
 
 ### 3.2 Application Layer ✅ COMPLETED
 - [x] CreateCustomer use case (with duplicate detection, code generation, contact creation)
@@ -159,33 +163,74 @@
 - [x] Entity to DTO mappers (Customer and Contact mappers)
 - [x] Application error handling with codes
 
-### 3.3 Infrastructure Layer
-- [x] MongoDB CustomerRepository (connection ready)
-- [x] MongoDB ContactRepository (connection ready)
-- [ ] Search indexes
-- [ ] Full-text search
-- [ ] Event publisher
+### 3.3 Infrastructure Layer ✅ COMPLETED
+- [x] MongoDB CustomerRepository (full CRUD, filtering, pagination)
+- [x] MongoDB ContactRepository (full CRUD, customer-scoped queries)
+- [x] MongoDB NoteRepository (CRUD, pinning, customer notes)
+- [x] MongoDB ActivityRepository (logging, filtering, aggregation)
+- [x] MongoDB SegmentRepository (static/dynamic segments, rule-based filtering)
+- [x] MongoDB ImportRepository (import tracking, error logging)
+- [x] MongoDB OutboxRepository (transactional outbox pattern)
+- [x] MongoDB Indexes (comprehensive indexes for all collections)
+- [x] MongoDB UnitOfWork (transaction management)
+- [x] RabbitMQ event publisher (with reconnection, outbox processor)
+- [x] Redis cache service adapter (TTL, invalidation, tenant-scoped)
+- [x] In-memory cache for testing
 
-### 3.4 API Endpoints
-- [x] CRUD /customers (stubs)
-- [x] CRUD /customers/{id}/contacts (stubs)
-- [x] POST /customers/import (stub)
-- [x] GET /customers/export (stub)
-- [x] GET /customers/search (stub)
+### 3.4 API Endpoints ✅ COMPLETED
+- [x] CRUD /customers (full implementation)
+- [x] POST /customers/{id}/restore
+- [x] POST /customers/{id}/activate
+- [x] POST /customers/{id}/deactivate
+- [x] POST /customers/{id}/block
+- [x] POST /customers/{id}/unblock
+- [x] CRUD /customers/{id}/contacts (full implementation)
+- [x] POST /customers/{id}/contacts/{id}/primary
+- [x] CRUD /customers/{id}/notes (full implementation)
+- [x] POST /customers/{id}/notes/{id}/pin
+- [x] GET /customers/{id}/activities (full implementation)
+- [x] POST /customers/{id}/activities
+- [x] POST /customers/import (full implementation)
+- [x] GET /customers/export (full implementation)
+- [x] GET /customers (search with filters)
+- [x] CRUD /segments (full implementation)
+- [x] POST /segments/{id}/refresh
+- [x] GET /segments/{id}/customers
+- [x] CRUD /imports (status, errors, cancel)
+
+### 3.5 HTTP Layer ✅ COMPLETED
+- [x] Chi router setup with middleware chain
+- [x] Request ID middleware
+- [x] Logging middleware
+- [x] Recovery middleware (panic handling)
+- [x] Tenant extraction middleware
+- [x] Authentication middleware (JWT-ready)
+- [x] Global rate limiting
+- [x] Per-tenant rate limiting
+- [x] Request timeout middleware
+- [x] Request body size limiter
+- [x] CORS middleware
+- [x] Security headers middleware
+- [x] Content-Type validation
+- [x] Health check endpoints
+- [x] Error handling with domain/application error mapping
+- [x] Wire dependency injection setup
+- [x] Service entrypoint (cmd/customer)
 
 ---
 
-## Phase 4: Sales Pipeline Service ⏳ PENDING
+## Phase 4: Sales Pipeline Service 🔄 IN PROGRESS
 
-### 4.1 Domain Layer
-- [ ] Lead aggregate
-- [ ] Opportunity aggregate
-- [ ] Deal aggregate
-- [ ] Stage entity
-- [ ] Pipeline entity
-- [ ] Money value object
-- [ ] Lead.ConvertToDeal() behavior
-- [ ] Domain events
+### 4.1 Domain Layer ✅ COMPLETED
+- [x] Lead aggregate (with scoring, qualification, status management, conversion to opportunity)
+- [x] Opportunity aggregate (with pipeline stages, products, contacts, won/lost handling)
+- [x] Deal aggregate (with line items, invoicing, payments, fulfillment tracking)
+- [x] Stage entity (with types: open, won, lost, qualifying, negotiating)
+- [x] Pipeline entity (with configurable stages, win/loss reasons, custom fields)
+- [x] Money value object (with fixed-point arithmetic, 40+ currencies, precision handling)
+- [x] Lead.ConvertToOpportunity() behavior (with qualification checks, data transfer)
+- [x] Domain events (20+ events: Lead, Opportunity, Deal, Pipeline events)
+- [x] Repository interfaces (Lead, Opportunity, Deal, Pipeline, EventStore, UnitOfWork)
 
 ### 4.2 Application Layer
 - [ ] CreateLead use case
@@ -367,13 +412,13 @@
 |-------|-------------|-----------|----------|
 | Phase 1 | 22 | 22 | ✅ 100% |
 | Phase 2 | 68 | 68 | ✅ 100% |
-| Phase 3 | 29 | 26 | 🔄 90% |
-| Phase 4 | 30 | 12 | ⏳ 40% |
+| Phase 3 | 60 | 60 | ✅ 100% |
+| Phase 4 | 36 | 21 | 🔄 58% |
 | Phase 5 | 17 | 5 | ⏳ 29% |
 | Phase 6 | 17 | 11 | ⏳ 65% |
 | Phase 7 | 19 | 0 | ⏳ 0% |
 | Phase 8 | 22 | 8 | ⏳ 36% |
-| **Total** | **224** | **152** | **68%** |
+| **Total** | **261** | **195** | **75%** |
 
 ---
 

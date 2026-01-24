@@ -4,12 +4,18 @@ package ports
 
 import (
 	"context"
+	"errors"
 	"io"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/domain"
+)
+
+// Cache errors
+var (
+	ErrCacheMiss = errors.New("cache miss")
 )
 
 // ============================================================================

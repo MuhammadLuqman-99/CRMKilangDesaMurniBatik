@@ -157,3 +157,7 @@ __debug_bin
 configs/local/
 *.local.yaml
 *.local.json
+
+# Claude temp files
+tmpclaude-*
+nul

@@ -232,15 +232,31 @@
 - [x] Domain events (20+ events: Lead, Opportunity, Deal, Pipeline events)
 - [x] Repository interfaces (Lead, Opportunity, Deal, Pipeline, EventStore, UnitOfWork)
 
-### 4.2 Application Layer
-- [ ] CreateLead use case
-- [ ] QualifyLead use case
-- [ ] ConvertLeadToOpportunity use case
-- [ ] CreateOpportunity use case
-- [ ] UpdateOpportunityStage use case
-- [ ] WinOpportunity use case
-- [ ] LoseOpportunity use case
-- [ ] GetPipelineAnalytics use case
+### 4.2 Application Layer ✅ COMPLETED
+- [x] DTOs for Lead, Opportunity, Deal, Pipeline (comprehensive request/response DTOs with validation)
+- [x] Port interfaces for external services (EventPublisher, CacheService, CustomerService, etc.)
+- [x] Application error handling with 60+ error codes
+- [x] CreateLead use case (with scoring, assignment, duplicate detection)
+- [x] QualifyLead use case (with BANT criteria, status management)
+- [x] DisqualifyLead use case (with reason tracking)
+- [x] ConvertLeadToOpportunity use case (with customer/contact creation)
+- [x] LeadUseCase full implementation (CRUD, bulk operations, statistics)
+- [x] CreateOpportunity use case (with products, contacts, stage management)
+- [x] UpdateOpportunityStage use case (with history tracking)
+- [x] WinOpportunity use case (with deal creation)
+- [x] LoseOpportunity use case (with competitor tracking)
+- [x] ReopenOpportunity use case
+- [x] OpportunityUseCase full implementation (CRUD, stage ops, products, contacts, competitors)
+- [x] CreateDeal use case (from won opportunity)
+- [x] DealLineItem management (add, update, remove)
+- [x] Invoice generation and payment recording
+- [x] Fulfillment tracking
+- [x] DealUseCase full implementation (CRUD, payments, invoices, fulfillment, statistics)
+- [x] CreatePipeline use case (with default stages)
+- [x] UpdatePipeline/Stage use cases
+- [x] PipelineUseCase full implementation (CRUD, stages, templates, analytics, forecasting)
+- [x] Entity to DTO mappers (Lead, Opportunity, Deal, Pipeline mappers)
+- [x] GetPipelineAnalytics use case
 
 ### 4.3 Infrastructure Layer
 - [x] PostgreSQL LeadRepository (connection ready)
@@ -413,12 +429,12 @@
 | Phase 1 | 22 | 22 | ✅ 100% |
 | Phase 2 | 68 | 68 | ✅ 100% |
 | Phase 3 | 60 | 60 | ✅ 100% |
-| Phase 4 | 36 | 21 | 🔄 58% |
+| Phase 4 | 51 | 43 | 🔄 84% |
 | Phase 5 | 17 | 5 | ⏳ 29% |
 | Phase 6 | 17 | 11 | ⏳ 65% |
 | Phase 7 | 19 | 0 | ⏳ 0% |
 | Phase 8 | 22 | 8 | ⏳ 36% |
-| **Total** | **261** | **195** | **75%** |
+| **Total** | **276** | **217** | **79%** |
 
 ---
 

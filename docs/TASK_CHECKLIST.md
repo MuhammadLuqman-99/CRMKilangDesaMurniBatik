@@ -117,10 +117,10 @@
 - [x] GET /tenants/by-slug/{slug}
 
 ### 2.5 Security ✅ COMPLETED
-- [ ] OAuth2/OIDC integration
+- [x] OAuth2/OIDC integration (Google, Microsoft, GitHub providers with PKCE, JWKS validation)
 - [x] RBAC middleware (full implementation)
 - [x] Permission validation middleware
-- [ ] ABAC policy engine
+- [x] ABAC policy engine (policy definition, evaluation engine, attribute providers, middleware)
 - [x] Rate limiting middleware (IP, user, tenant, endpoint-based)
 - [x] Login throttling
 - [x] Token blacklisting
@@ -362,14 +362,14 @@
 | Phase | Total Tasks | Completed | Progress |
 |-------|-------------|-----------|----------|
 | Phase 1 | 22 | 22 | ✅ 100% |
-| Phase 2 | 68 | 66 | ✅ 97% |
+| Phase 2 | 68 | 68 | ✅ 100% |
 | Phase 3 | 24 | 7 | ⏳ 29% |
 | Phase 4 | 30 | 12 | ⏳ 40% |
 | Phase 5 | 17 | 5 | ⏳ 29% |
 | Phase 6 | 17 | 11 | ⏳ 65% |
 | Phase 7 | 19 | 0 | ⏳ 0% |
 | Phase 8 | 22 | 8 | ⏳ 36% |
-| **Total** | **219** | **131** | **60%** |
+| **Total** | **219** | **133** | **61%** |
 
 ---
 

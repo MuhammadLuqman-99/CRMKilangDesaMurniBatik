@@ -184,7 +184,7 @@ func toHTTPError(err error) *ErrorResponse {
 	}
 
 	// Check for application errors
-	var appErr *application.Error
+	var appErr *application.AppError
 	if errors.As(err, &appErr) {
 		return mapAppError(appErr)
 	}
@@ -216,26 +216,23 @@ func toHTTPError(err error) *ErrorResponse {
 	if errors.Is(err, domain.ErrOpportunityNotFound) {
 		return ErrNotFound("opportunity")
 	}
-	if errors.Is(err, domain.ErrOpportunityClosed) {
+	if errors.Is(err, domain.ErrOpportunityAlreadyClosed) {
 		return ErrConflict("opportunity is already closed")
+	}
+	if errors.Is(err, domain.ErrOpportunityNotClosed) {
+		return ErrBadRequest("opportunity is not closed")
 	}
 	if errors.Is(err, domain.ErrInvalidOpportunityStatus) {
 		return ErrBadRequest("invalid opportunity status")
 	}
-	if errors.Is(err, domain.ErrOpportunityAlreadyWon) {
-		return ErrConflict("opportunity is already won")
-	}
-	if errors.Is(err, domain.ErrOpportunityAlreadyLost) {
-		return ErrConflict("opportunity is already lost")
-	}
 	if errors.Is(err, domain.ErrInvalidStageTransition) {
 		return ErrBadRequest("invalid stage transition")
 	}
-	if errors.Is(err, domain.ErrProductNotFound) {
-		return ErrNotFound("product")
+	if errors.Is(err, domain.ErrOpportunityVersionMismatch) {
+		return ErrConflict("opportunity version mismatch")
 	}
-	if errors.Is(err, domain.ErrContactNotInOpportunity) {
-		return ErrNotFound("contact not found in opportunity")
+	if errors.Is(err, domain.ErrCannotReopenAfterDays) {
+		return ErrConflict("cannot reopen opportunity after 30 days")
 	}
 
 	// Check for domain errors - Deal
@@ -248,26 +245,26 @@ func toHTTPError(err error) *ErrorResponse {
 	if errors.Is(err, domain.ErrInvalidDealStatus) {
 		return ErrBadRequest("invalid deal status")
 	}
-	if errors.Is(err, domain.ErrDealNotActive) {
-		return ErrConflict("deal is not active")
+	if errors.Is(err, domain.ErrDealAlreadyClosed) {
+		return ErrConflict("deal is already closed")
 	}
-	if errors.Is(err, domain.ErrDealAlreadyCompleted) {
-		return ErrConflict("deal is already completed")
+	if errors.Is(err, domain.ErrDealAlreadyFulfilled) {
+		return ErrConflict("deal is already fulfilled")
 	}
-	if errors.Is(err, domain.ErrDealAlreadyCancelled) {
-		return ErrConflict("deal is already cancelled")
+	if errors.Is(err, domain.ErrDealCannotBeCancelled) {
+		return ErrConflict("deal cannot be cancelled")
 	}
-	if errors.Is(err, domain.ErrInvoiceNotFound) {
-		return ErrNotFound("invoice")
+	if errors.Is(err, domain.ErrDealVersionMismatch) {
+		return ErrConflict("deal version mismatch")
 	}
-	if errors.Is(err, domain.ErrPaymentNotFound) {
-		return ErrNotFound("payment")
+	if errors.Is(err, domain.ErrInvalidPaymentTerm) {
+		return ErrBadRequest("invalid payment term")
 	}
-	if errors.Is(err, domain.ErrPaymentExceedsAmount) {
+	if errors.Is(err, domain.ErrInvoiceAlreadyExists) {
+		return ErrConflict("invoice already exists")
+	}
+	if errors.Is(err, domain.ErrPaymentExceedsBalance) {
 		return ErrBadRequest("payment amount exceeds remaining balance")
-	}
-	if errors.Is(err, domain.ErrLineItemNotFound) {
-		return ErrNotFound("line item")
 	}
 
 	// Check for domain errors - Pipeline
@@ -321,70 +318,118 @@ func toHTTPError(err error) *ErrorResponse {
 }
 
 // mapAppError maps application errors to HTTP errors.
-func mapAppError(err *application.Error) *ErrorResponse {
+func mapAppError(err *application.AppError) *ErrorResponse {
 	switch err.Code {
 	// Validation errors
-	case application.ErrCodeValidationFailed:
+	case application.ErrCodeValidation:
 		details := make(map[string]string)
-		if d, ok := err.Details.(map[string]string); ok {
-			details = d
+		for k, v := range err.Details {
+			if s, ok := v.(string); ok {
+				details[k] = s
+			}
 		}
 		return ErrValidation(err.Message, details)
-	case application.ErrCodeInvalidInput:
-		return ErrBadRequest(err.Message)
 
 	// Not found errors
-	case application.ErrCodeLeadNotFound,
+	case application.ErrCodeNotFound,
+		application.ErrCodeLeadNotFound,
 		application.ErrCodeOpportunityNotFound,
 		application.ErrCodeDealNotFound,
 		application.ErrCodePipelineNotFound,
-		application.ErrCodeStageNotFound,
+		application.ErrCodePipelineStageNotFound,
 		application.ErrCodeProductNotFound,
 		application.ErrCodeContactNotFound,
 		application.ErrCodeCustomerNotFound,
-		application.ErrCodeInvoiceNotFound,
-		application.ErrCodePaymentNotFound:
+		application.ErrCodeDealInvoiceNotFound,
+		application.ErrCodeDealPaymentNotFound,
+		application.ErrCodeDealLineItemNotFound,
+		application.ErrCodeOpportunityProductNotFound,
+		application.ErrCodeOpportunityContactNotFound,
+		application.ErrCodeUserNotFound:
 		return ErrNotFound(err.Message)
 
-	// Conflict errors
-	case application.ErrCodeLeadAlreadyConverted,
+	// Conflict/Already exists errors
+	case application.ErrCodeConflict,
+		application.ErrCodeAlreadyExists,
+		application.ErrCodeLeadAlreadyExists,
+		application.ErrCodeLeadAlreadyConverted,
 		application.ErrCodeLeadAlreadyQualified,
+		application.ErrCodeLeadAlreadyDisqualified,
+		application.ErrCodeOpportunityAlreadyExists,
 		application.ErrCodeOpportunityClosed,
 		application.ErrCodeOpportunityAlreadyWon,
 		application.ErrCodeOpportunityAlreadyLost,
 		application.ErrCodeDealAlreadyExists,
-		application.ErrCodeDealAlreadyCompleted,
-		application.ErrCodeDealAlreadyCancelled,
+		application.ErrCodeDealCompleted,
+		application.ErrCodeDealCancelled,
 		application.ErrCodePipelineAlreadyExists,
-		application.ErrCodeStageAlreadyExists,
-		application.ErrCodeVersionConflict:
+		application.ErrCodePipelineStageDuplicate,
+		application.ErrCodeOpportunityContactDuplicate,
+		application.ErrCodeOpportunityProductDuplicate,
+		application.ErrCodeVersionMismatch,
+		application.ErrCodeConcurrentModification:
 		return ErrConflict(err.Message)
 
 	// Business rule violations
 	case application.ErrCodeLeadNotQualified,
-		application.ErrCodeInvalidStageTransition,
-		application.ErrCodeDealNotActive,
-		application.ErrCodePaymentExceedsBalance,
+		application.ErrCodeLeadInvalidStatus,
+		application.ErrCodeLeadInvalidTransition,
+		application.ErrCodeOpportunityInvalidStatus,
+		application.ErrCodeOpportunityInvalidTransition,
+		application.ErrCodeDealInvalidStatus,
+		application.ErrCodeDealInvalidTransition,
+		application.ErrCodeDealPaymentExceedsBalance,
+		application.ErrCodeDealFulfillmentExceeds,
+		application.ErrCodeDealCannotCancel,
 		application.ErrCodePipelineInactive,
+		application.ErrCodePipelineStageInactive,
 		application.ErrCodePipelineHasOpportunities,
-		application.ErrCodeMinimumStagesRequired,
-		application.ErrCodeCannotDeleteDefaultPipeline:
+		application.ErrCodePipelineStageHasOpportunities,
+		application.ErrCodePipelineMinStagesRequired,
+		application.ErrCodePipelineWonStageRequired,
+		application.ErrCodePipelineLostStageRequired,
+		application.ErrCodePipelineDefaultRequired,
+		application.ErrCodePipelineCannotDelete,
+		application.ErrCodePipelineStageCannotDelete,
+		application.ErrCodePipelineInvalidStageOrder,
+		application.ErrCodeCurrencyMismatch,
+		application.ErrCodeCurrencyInvalid:
 		return ErrUnprocessableEntity(err.Message)
 
 	// Authorization errors
 	case application.ErrCodeUnauthorized:
 		return ErrUnauthorized(err.Message)
-	case application.ErrCodeForbidden,
-		application.ErrCodeTenantMismatch:
+	case application.ErrCodeForbidden:
 		return ErrForbidden(err.Message)
 
+	// Rate limiting
+	case application.ErrCodeRateLimited:
+		return &ErrorResponse{
+			StatusCode: http.StatusTooManyRequests,
+			Code:       "RATE_LIMITED",
+			Message:    err.Message,
+		}
+
 	// External service errors
-	case application.ErrCodeExternalServiceError:
+	case application.ErrCodeServiceUnavailable,
+		application.ErrCodeCustomerServiceError,
+		application.ErrCodeProductServiceError,
+		application.ErrCodeUserServiceError:
 		return ErrServiceUnavailable(err.Message)
 
 	// Internal errors
-	case application.ErrCodeInternalError,
-		application.ErrCodeDatabaseError:
+	case application.ErrCodeInternal,
+		application.ErrCodeEventPublishFailed,
+		application.ErrCodeCacheError,
+		application.ErrCodeSearchIndexError,
+		application.ErrCodeNotificationError,
+		application.ErrCodeLeadAssignmentFailed,
+		application.ErrCodeLeadConversionFailed,
+		application.ErrCodeLeadScoringFailed,
+		application.ErrCodeOpportunityAssignmentFailed,
+		application.ErrCodeOpportunityWinFailed,
+		application.ErrCodeOpportunityLoseFailed,
+		application.ErrCodeDealNumberGeneration:
 		return ErrInternalServer("an unexpected error occurred")
 
 	default:

@@ -12,7 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/kilang-desa-murni/crm/internal/sales/application/dto"
+	"github.com/kilang-desa-murni/crm/internal/sales/application"
 	"github.com/kilang-desa-murni/crm/internal/sales/application/usecase"
 	"github.com/kilang-desa-murni/crm/internal/sales/domain"
 )
@@ -76,12 +76,30 @@ func (h *Handler) getTenantID(ctx context.Context) (uuid.UUID, error) {
 	return uuid.Nil, ErrUnauthorized("tenant identification required")
 }
 
+// getTenantIDUnsafe extracts the tenant ID from the context without error.
+// Returns uuid.Nil if not found. Caller should check for uuid.Nil.
+func (h *Handler) getTenantIDUnsafe(ctx context.Context) uuid.UUID {
+	if id, ok := ctx.Value(TenantIDKey).(uuid.UUID); ok {
+		return id
+	}
+	return uuid.Nil
+}
+
 // getUserID extracts the user ID from the context.
 func (h *Handler) getUserID(ctx context.Context) (*uuid.UUID, error) {
 	if id, ok := ctx.Value(UserIDKey).(uuid.UUID); ok && id != uuid.Nil {
 		return &id, nil
 	}
 	return nil, nil
+}
+
+// getUserIDDirect extracts the user ID from the context as uuid.UUID.
+// Returns uuid.Nil if not found.
+func (h *Handler) getUserIDDirect(ctx context.Context) uuid.UUID {
+	if id, ok := ctx.Value(UserIDKey).(uuid.UUID); ok {
+		return id
+	}
+	return uuid.Nil
 }
 
 // getRequestID extracts the request ID from the context.
@@ -362,9 +380,14 @@ func (h *Handler) respondError(w http.ResponseWriter, err error) {
 	})
 }
 
-// mapAppError maps application/domain errors to HTTP errors
-func (h *Handler) mapAppError(err error) error {
-	return mapAppError(err)
+// toError maps application/domain errors to HTTP errors
+func (h *Handler) toError(err error) *ErrorResponse {
+	// Try to get AppError from the error
+	if appErr := application.GetAppError(err); appErr != nil {
+		return mapAppError(appErr)
+	}
+	// Fall back to domain error mapping
+	return toHTTPError(err)
 }
 
 // ============================================================================
@@ -372,8 +395,8 @@ func (h *Handler) mapAppError(err error) error {
 // ============================================================================
 
 // buildLeadFilter builds a LeadFilter from query parameters.
-func (h *Handler) buildLeadFilter(r *http.Request) dto.LeadFilter {
-	filter := dto.LeadFilter{}
+func (h *Handler) buildLeadFilter(r *http.Request) domain.LeadFilter {
+	filter := domain.LeadFilter{}
 
 	// Status filters
 	if statuses := h.getQueryStringSlice(r, "statuses"); len(statuses) > 0 {
@@ -417,8 +440,8 @@ func (h *Handler) buildLeadFilter(r *http.Request) dto.LeadFilter {
 }
 
 // buildOpportunityFilter builds an OpportunityFilter from query parameters.
-func (h *Handler) buildOpportunityFilter(r *http.Request) dto.OpportunityFilter {
-	filter := dto.OpportunityFilter{}
+func (h *Handler) buildOpportunityFilter(r *http.Request) domain.OpportunityFilter {
+	filter := domain.OpportunityFilter{}
 
 	// Status filters
 	if statuses := h.getQueryStringSlice(r, "statuses"); len(statuses) > 0 {
@@ -467,8 +490,8 @@ func (h *Handler) buildOpportunityFilter(r *http.Request) dto.OpportunityFilter 
 }
 
 // buildDealFilter builds a DealFilter from query parameters.
-func (h *Handler) buildDealFilter(r *http.Request) dto.DealFilter {
-	filter := dto.DealFilter{}
+func (h *Handler) buildDealFilter(r *http.Request) domain.DealFilter {
+	filter := domain.DealFilter{}
 
 	// Status filters
 	if statuses := h.getQueryStringSlice(r, "statuses"); len(statuses) > 0 {
@@ -510,9 +533,9 @@ func (h *Handler) buildDealFilter(r *http.Request) dto.DealFilter {
 }
 
 // buildListOptions builds ListOptions from query parameters.
-func (h *Handler) buildListOptions(r *http.Request) dto.ListOptions {
+func (h *Handler) buildListOptions(r *http.Request) domain.ListOptions {
 	includeDeleted := h.getQueryBool(r, "include_deleted")
-	return dto.ListOptions{
+	return domain.ListOptions{
 		Page:           h.getQueryInt(r, "page", 1),
 		PageSize:       h.getQueryInt(r, "page_size", 20),
 		SortBy:         h.getQueryString(r, "sort_by"),

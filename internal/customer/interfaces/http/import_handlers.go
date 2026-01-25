@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/application/usecase"
+	"github.com/kilang-desa-murni/crm/internal/customer/application/usecase"
 )
 
 // ============================================================================

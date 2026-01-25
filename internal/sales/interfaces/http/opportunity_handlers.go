@@ -4,8 +4,6 @@ package http
 import (
 	"net/http"
 
-	"github.com/google/uuid"
-
 	"github.com/kilang-desa-murni/crm/internal/sales/application/dto"
 )
 
@@ -16,618 +14,544 @@ import (
 // CreateOpportunity handles POST /opportunities
 func (h *Handler) CreateOpportunity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
+	tenantID, err := h.getTenantID(ctx)
+	if err != nil {
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
+
+	userID, _ := h.getUserID(ctx)
 
 	var req dto.CreateOpportunityRequest
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
+	if err := h.decodeJSON(r, &req); err != nil {
+		h.respondError(w, err)
 		return
 	}
 
-	req.TenantID = tenantID
-	if req.OwnerID == uuid.Nil && userID != uuid.Nil {
-		req.OwnerID = userID
-	}
-
-	opportunity, err := h.opportunityUseCase.Create(ctx, &req)
+	opportunity, err := h.opportunityUseCase.Create(ctx, tenantID, ptrToUUID(userID), &req)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, h.toError(err))
 		return
 	}
 
-	respondCreated(w, opportunity)
+	h.respondCreated(w, opportunity)
 }
 
 // GetOpportunity handles GET /opportunities/{opportunityId}
 func (h *Handler) GetOpportunity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
+	tenantID, err := h.getTenantID(ctx)
+	if err != nil {
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
 	opportunity, err := h.opportunityUseCase.GetByID(ctx, tenantID, opportunityID)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, h.toError(err))
 		return
 	}
 
-	respondSuccess(w, opportunity)
+	h.respondSuccess(w, http.StatusOK, opportunity)
 }
 
 // UpdateOpportunity handles PUT /opportunities/{opportunityId}
 func (h *Handler) UpdateOpportunity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
+	tenantID, err := h.getTenantID(ctx)
+	if err != nil {
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	userID, _ := h.getUserID(ctx)
+
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
 	var req dto.UpdateOpportunityRequest
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
+	if err := h.decodeJSON(r, &req); err != nil {
+		h.respondError(w, err)
 		return
 	}
 
-	req.TenantID = tenantID
-	req.OpportunityID = opportunityID
-	req.UpdatedBy = userID
-
-	opportunity, err := h.opportunityUseCase.Update(ctx, &req)
+	opportunity, err := h.opportunityUseCase.Update(ctx, tenantID, opportunityID, ptrToUUID(userID), &req)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, h.toError(err))
 		return
 	}
 
-	respondSuccess(w, opportunity)
+	h.respondSuccess(w, http.StatusOK, opportunity)
 }
 
 // DeleteOpportunity handles DELETE /opportunities/{opportunityId}
 func (h *Handler) DeleteOpportunity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	tenantID, err := h.getTenantID(ctx)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	if err := h.opportunityUseCase.Delete(ctx, tenantID, opportunityID); err != nil {
-		respondError(w, err)
+	userID, _ := h.getUserID(ctx)
+
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
+	if err != nil {
+		h.respondError(w, err)
 		return
 	}
 
-	respondNoContent(w)
+	if err := h.opportunityUseCase.Delete(ctx, tenantID, opportunityID, ptrToUUID(userID)); err != nil {
+		h.respondError(w, h.toError(err))
+		return
+	}
+
+	h.respondNoContent(w)
 }
 
 // ListOpportunities handles GET /opportunities
 func (h *Handler) ListOpportunities(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	filter := buildOpportunityFilter(r)
-	opts := buildListOptions(r)
-
-	req := &dto.ListOpportunitiesRequest{
-		TenantID: tenantID,
-		Filter:   filter,
-		Options:  opts,
-	}
-
-	opportunities, total, err := h.opportunityUseCase.List(ctx, req)
+	tenantID, err := h.getTenantID(ctx)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	respondList(w, opportunities, total, opts.Page, opts.PageSize)
+	req := h.buildOpportunityFilterRequest(r)
+
+	result, err := h.opportunityUseCase.List(ctx, tenantID, req)
+	if err != nil {
+		h.respondError(w, h.toError(err))
+		return
+	}
+
+	h.respondList(w, result.Opportunities, result.Pagination.TotalItems, req.Page, req.PageSize)
+}
+
+// buildOpportunityFilterRequest builds an OpportunityFilterRequest from query parameters.
+func (h *Handler) buildOpportunityFilterRequest(r *http.Request) *dto.OpportunityFilterRequest {
+	req := &dto.OpportunityFilterRequest{
+		Page:      h.getQueryInt(r, "page", 1),
+		PageSize:  h.getQueryInt(r, "page_size", 20),
+		SortBy:    h.getQueryString(r, "sort_by"),
+		SortOrder: h.getQueryString(r, "sort_order"),
+	}
+
+	// Status filters
+	if statuses := h.getQueryStringSlice(r, "statuses"); len(statuses) > 0 {
+		req.Statuses = statuses
+	}
+
+	// Pipeline filters
+	req.PipelineIDs = h.getQueryStringSlice(r, "pipeline_ids")
+	req.StageIDs = h.getQueryStringSlice(r, "stage_ids")
+
+	// Relationship filters
+	req.CustomerIDs = h.getQueryStringSlice(r, "customer_ids")
+	req.OwnerIDs = h.getQueryStringSlice(r, "owner_ids")
+
+	// Value filters
+	if minAmount := h.getQueryInt64(r, "min_amount"); minAmount != nil {
+		req.MinAmount = minAmount
+	}
+	if maxAmount := h.getQueryInt64(r, "max_amount"); maxAmount != nil {
+		req.MaxAmount = maxAmount
+	}
+
+	// Search
+	req.SearchQuery = h.getQueryString(r, "q")
+
+	return req
 }
 
 // ============================================================================
 // Stage Operations
 // ============================================================================
 
-// MoveToStage handles POST /opportunities/{opportunityId}/stage
-func (h *Handler) MoveToStage(w http.ResponseWriter, r *http.Request) {
+// MoveOpportunityStage handles POST /opportunities/{opportunityId}/stage
+func (h *Handler) MoveOpportunityStage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	tenantID, err := h.getTenantID(ctx)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	var req dto.MoveToStageRequest
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
-		return
-	}
+	userID, _ := h.getUserID(ctx)
 
-	req.TenantID = tenantID
-	req.OpportunityID = opportunityID
-	req.ChangedBy = userID
-
-	opportunity, err := h.opportunityUseCase.MoveToStage(ctx, &req)
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
-	respondSuccess(w, opportunity)
+	var req dto.MoveStageRequest
+	if err := h.decodeJSON(r, &req); err != nil {
+		h.respondError(w, err)
+		return
+	}
+
+	opportunity, err := h.opportunityUseCase.MoveStage(ctx, tenantID, opportunityID, ptrToUUID(userID), &req)
+	if err != nil {
+		h.respondError(w, h.toError(err))
+		return
+	}
+
+	h.respondSuccess(w, http.StatusOK, opportunity)
 }
 
 // WinOpportunity handles POST /opportunities/{opportunityId}/win
 func (h *Handler) WinOpportunity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
+	tenantID, err := h.getTenantID(ctx)
+	if err != nil {
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	userID, _ := h.getUserID(ctx)
+
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
 	var req dto.WinOpportunityRequest
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
+	if err := h.decodeJSON(r, &req); err != nil {
+		h.respondError(w, err)
 		return
 	}
 
-	req.TenantID = tenantID
-	req.OpportunityID = opportunityID
-	req.ClosedBy = userID
-
-	result, err := h.opportunityUseCase.Win(ctx, &req)
+	result, err := h.opportunityUseCase.Win(ctx, tenantID, opportunityID, ptrToUUID(userID), &req)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, h.toError(err))
 		return
 	}
 
-	respondSuccess(w, result)
+	h.respondSuccess(w, http.StatusOK, result)
 }
 
 // LoseOpportunity handles POST /opportunities/{opportunityId}/lose
 func (h *Handler) LoseOpportunity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
+	tenantID, err := h.getTenantID(ctx)
+	if err != nil {
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	userID, _ := h.getUserID(ctx)
+
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
 	var req dto.LoseOpportunityRequest
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
+	if err := h.decodeJSON(r, &req); err != nil {
+		h.respondError(w, err)
 		return
 	}
 
-	req.TenantID = tenantID
-	req.OpportunityID = opportunityID
-	req.ClosedBy = userID
-
-	opportunity, err := h.opportunityUseCase.Lose(ctx, &req)
+	result, err := h.opportunityUseCase.Lose(ctx, tenantID, opportunityID, ptrToUUID(userID), &req)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, h.toError(err))
 		return
 	}
 
-	respondSuccess(w, opportunity)
+	h.respondSuccess(w, http.StatusOK, result)
 }
 
 // ReopenOpportunity handles POST /opportunities/{opportunityId}/reopen
 func (h *Handler) ReopenOpportunity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
+	tenantID, err := h.getTenantID(ctx)
+	if err != nil {
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	userID, _ := h.getUserID(ctx)
+
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
 	var req dto.ReopenOpportunityRequest
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
+	if err := h.decodeJSON(r, &req); err != nil {
+		h.respondError(w, err)
 		return
 	}
 
-	req.TenantID = tenantID
-	req.OpportunityID = opportunityID
-	req.ReopenedBy = userID
-
-	opportunity, err := h.opportunityUseCase.Reopen(ctx, &req)
+	opportunity, err := h.opportunityUseCase.Reopen(ctx, tenantID, opportunityID, ptrToUUID(userID), &req)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, h.toError(err))
 		return
 	}
 
-	respondSuccess(w, opportunity)
-}
-
-// GetStageHistory handles GET /opportunities/{opportunityId}/stage-history
-func (h *Handler) GetStageHistory(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	opportunityID, err := getUUIDParam(r, "opportunityId")
-	if err != nil {
-		respondError(w, err)
-		return
-	}
-
-	history, err := h.opportunityUseCase.GetStageHistory(ctx, tenantID, opportunityID)
-	if err != nil {
-		respondError(w, err)
-		return
-	}
-
-	respondSuccess(w, history)
+	h.respondSuccess(w, http.StatusOK, opportunity)
 }
 
 // ============================================================================
 // Product Operations
 // ============================================================================
 
-// AddProduct handles POST /opportunities/{opportunityId}/products
+// AddOpportunityProduct handles POST /opportunities/{opportunityId}/products
 func (h *Handler) AddOpportunityProduct(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	tenantID, err := h.getTenantID(ctx)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	var req dto.AddOpportunityProductRequest
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
-		return
-	}
+	userID, _ := h.getUserID(ctx)
 
-	req.TenantID = tenantID
-	req.OpportunityID = opportunityID
-	req.AddedBy = userID
-
-	opportunity, err := h.opportunityUseCase.AddProduct(ctx, &req)
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
-	respondSuccess(w, opportunity)
+	var req dto.AddProductRequest
+	if err := h.decodeJSON(r, &req); err != nil {
+		h.respondError(w, err)
+		return
+	}
+
+	opportunity, err := h.opportunityUseCase.AddProduct(ctx, tenantID, opportunityID, ptrToUUID(userID), &req)
+	if err != nil {
+		h.respondError(w, h.toError(err))
+		return
+	}
+
+	h.respondSuccess(w, http.StatusOK, opportunity)
 }
 
-// UpdateProduct handles PUT /opportunities/{opportunityId}/products/{productId}
+// UpdateOpportunityProduct handles PUT /opportunities/{opportunityId}/products/{productId}
 func (h *Handler) UpdateOpportunityProduct(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	tenantID, err := h.getTenantID(ctx)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	productID, err := getUUIDParam(r, "productId")
+	userID, _ := h.getUserID(ctx)
+
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
-	var req dto.UpdateOpportunityProductRequest
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
-		return
-	}
-
-	req.TenantID = tenantID
-	req.OpportunityID = opportunityID
-	req.ProductID = productID
-	req.UpdatedBy = userID
-
-	opportunity, err := h.opportunityUseCase.UpdateProduct(ctx, &req)
+	productID, err := h.getUUIDParam(r, "productId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
-	respondSuccess(w, opportunity)
+	var req dto.UpdateProductRequest
+	if err := h.decodeJSON(r, &req); err != nil {
+		h.respondError(w, err)
+		return
+	}
+
+	opportunity, err := h.opportunityUseCase.UpdateProduct(ctx, tenantID, opportunityID, productID, ptrToUUID(userID), &req)
+	if err != nil {
+		h.respondError(w, h.toError(err))
+		return
+	}
+
+	h.respondSuccess(w, http.StatusOK, opportunity)
 }
 
-// RemoveProduct handles DELETE /opportunities/{opportunityId}/products/{productId}
+// RemoveOpportunityProduct handles DELETE /opportunities/{opportunityId}/products/{productId}
 func (h *Handler) RemoveOpportunityProduct(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	tenantID, err := h.getTenantID(ctx)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	productID, err := getUUIDParam(r, "productId")
+	userID, _ := h.getUserID(ctx)
+
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
-	opportunity, err := h.opportunityUseCase.RemoveProduct(ctx, tenantID, opportunityID, productID, userID)
+	productID, err := h.getUUIDParam(r, "productId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
-	respondSuccess(w, opportunity)
+	opportunity, err := h.opportunityUseCase.RemoveProduct(ctx, tenantID, opportunityID, productID, ptrToUUID(userID))
+	if err != nil {
+		h.respondError(w, h.toError(err))
+		return
+	}
+
+	h.respondSuccess(w, http.StatusOK, opportunity)
 }
 
 // ============================================================================
 // Contact Operations
 // ============================================================================
 
-// AddContact handles POST /opportunities/{opportunityId}/contacts
+// AddOpportunityContact handles POST /opportunities/{opportunityId}/contacts
 func (h *Handler) AddOpportunityContact(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	tenantID, err := h.getTenantID(ctx)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	var req dto.AddOpportunityContactRequest
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
-		return
-	}
+	userID, _ := h.getUserID(ctx)
 
-	req.TenantID = tenantID
-	req.OpportunityID = opportunityID
-	req.AddedBy = userID
-
-	opportunity, err := h.opportunityUseCase.AddContact(ctx, &req)
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
-	respondSuccess(w, opportunity)
+	var req dto.AddContactRequest
+	if err := h.decodeJSON(r, &req); err != nil {
+		h.respondError(w, err)
+		return
+	}
+
+	opportunity, err := h.opportunityUseCase.AddContact(ctx, tenantID, opportunityID, ptrToUUID(userID), &req)
+	if err != nil {
+		h.respondError(w, h.toError(err))
+		return
+	}
+
+	h.respondSuccess(w, http.StatusOK, opportunity)
 }
 
-// UpdateContact handles PUT /opportunities/{opportunityId}/contacts/{contactId}
+// UpdateOpportunityContact handles PUT /opportunities/{opportunityId}/contacts/{contactId}
 func (h *Handler) UpdateOpportunityContact(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	tenantID, err := h.getTenantID(ctx)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	contactID, err := getUUIDParam(r, "contactId")
+	userID, _ := h.getUserID(ctx)
+
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
-	var req dto.UpdateOpportunityContactRequest
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
-		return
-	}
-
-	req.TenantID = tenantID
-	req.OpportunityID = opportunityID
-	req.ContactID = contactID
-	req.UpdatedBy = userID
-
-	opportunity, err := h.opportunityUseCase.UpdateContact(ctx, &req)
+	contactID, err := h.getUUIDParam(r, "contactId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
-	respondSuccess(w, opportunity)
+	var req dto.UpdateContactRequest
+	if err := h.decodeJSON(r, &req); err != nil {
+		h.respondError(w, err)
+		return
+	}
+
+	opportunity, err := h.opportunityUseCase.UpdateContact(ctx, tenantID, opportunityID, contactID, ptrToUUID(userID), &req)
+	if err != nil {
+		h.respondError(w, h.toError(err))
+		return
+	}
+
+	h.respondSuccess(w, http.StatusOK, opportunity)
 }
 
-// RemoveContact handles DELETE /opportunities/{opportunityId}/contacts/{contactId}
+// RemoveOpportunityContact handles DELETE /opportunities/{opportunityId}/contacts/{contactId}
 func (h *Handler) RemoveOpportunityContact(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	tenantID, err := h.getTenantID(ctx)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	contactID, err := getUUIDParam(r, "contactId")
+	userID, _ := h.getUserID(ctx)
+
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
-	opportunity, err := h.opportunityUseCase.RemoveContact(ctx, tenantID, opportunityID, contactID, userID)
+	contactID, err := h.getUUIDParam(r, "contactId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
-	respondSuccess(w, opportunity)
-}
-
-// SetPrimaryContact handles POST /opportunities/{opportunityId}/contacts/{contactId}/primary
-func (h *Handler) SetOpportunityPrimaryContact(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	opportunity, err := h.opportunityUseCase.RemoveContact(ctx, tenantID, opportunityID, contactID, ptrToUUID(userID))
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, h.toError(err))
 		return
 	}
 
-	contactID, err := getUUIDParam(r, "contactId")
-	if err != nil {
-		respondError(w, err)
-		return
-	}
-
-	opportunity, err := h.opportunityUseCase.SetPrimaryContact(ctx, tenantID, opportunityID, contactID, userID)
-	if err != nil {
-		respondError(w, err)
-		return
-	}
-
-	respondSuccess(w, opportunity)
+	h.respondSuccess(w, http.StatusOK, opportunity)
 }
 
 // ============================================================================
 // Competitor Operations
 // ============================================================================
 
-// AddCompetitor handles POST /opportunities/{opportunityId}/competitors
-func (h *Handler) AddCompetitor(w http.ResponseWriter, r *http.Request) {
+// AddOpportunityCompetitor handles POST /opportunities/{opportunityId}/competitors
+func (h *Handler) AddOpportunityCompetitor(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	tenantID, err := h.getTenantID(ctx)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	var req struct {
-		Competitor string `json:"competitor"`
-	}
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
-		return
-	}
+	userID, _ := h.getUserID(ctx)
 
-	opportunity, err := h.opportunityUseCase.SetCompetitor(ctx, tenantID, opportunityID, req.Competitor, userID)
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
-	respondSuccess(w, opportunity)
+	var req dto.AddCompetitorRequest
+	if err := h.decodeJSON(r, &req); err != nil {
+		h.respondError(w, err)
+		return
+	}
+
+	opportunity, err := h.opportunityUseCase.AddCompetitor(ctx, tenantID, opportunityID, ptrToUUID(userID), &req)
+	if err != nil {
+		h.respondError(w, h.toError(err))
+		return
+	}
+
+	h.respondSuccess(w, http.StatusOK, opportunity)
 }
 
 // ============================================================================
@@ -637,249 +561,116 @@ func (h *Handler) AddCompetitor(w http.ResponseWriter, r *http.Request) {
 // AssignOpportunity handles POST /opportunities/{opportunityId}/assign
 func (h *Handler) AssignOpportunity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	opportunityID, err := getUUIDParam(r, "opportunityId")
+	tenantID, err := h.getTenantID(ctx)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	var req struct {
-		OwnerID uuid.UUID `json:"owner_id"`
-	}
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
-		return
-	}
+	userID, _ := h.getUserID(ctx)
 
-	opportunity, err := h.opportunityUseCase.Assign(ctx, tenantID, opportunityID, req.OwnerID, userID)
+	opportunityID, err := h.getUUIDParam(r, "opportunityId")
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, err)
 		return
 	}
 
-	respondSuccess(w, opportunity)
+	var req dto.AssignOpportunityRequest
+	if err := h.decodeJSON(r, &req); err != nil {
+		h.respondError(w, err)
+		return
+	}
+
+	opportunity, err := h.opportunityUseCase.Assign(ctx, tenantID, opportunityID, ptrToUUID(userID), &req)
+	if err != nil {
+		h.respondError(w, h.toError(err))
+		return
+	}
+
+	h.respondSuccess(w, http.StatusOK, opportunity)
 }
-
-// ============================================================================
-// Bulk Operations
-// ============================================================================
 
 // BulkAssignOpportunities handles POST /opportunities/bulk/assign
 func (h *Handler) BulkAssignOpportunities(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
+	tenantID, err := h.getTenantID(ctx)
+	if err != nil {
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
+
+	userID, _ := h.getUserID(ctx)
 
 	var req dto.BulkAssignOpportunitiesRequest
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
+	if err := h.decodeJSON(r, &req); err != nil {
+		h.respondError(w, err)
 		return
 	}
 
-	req.TenantID = tenantID
-	req.AssignedBy = userID
-
-	result, err := h.opportunityUseCase.BulkAssign(ctx, &req)
-	if err != nil {
-		respondError(w, err)
+	if err := h.opportunityUseCase.BulkAssign(ctx, tenantID, ptrToUUID(userID), &req); err != nil {
+		h.respondError(w, h.toError(err))
 		return
 	}
 
-	respondSuccess(w, result)
-}
-
-// BulkMoveStage handles POST /opportunities/bulk/stage
-func (h *Handler) BulkMoveStage(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-	userID := getUserID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	var req dto.BulkMoveStageRequest
-	if err := decodeJSON(r, &req); err != nil {
-		respondError(w, err)
-		return
-	}
-
-	req.TenantID = tenantID
-	req.ChangedBy = userID
-
-	result, err := h.opportunityUseCase.BulkMoveStage(ctx, &req)
-	if err != nil {
-		respondError(w, err)
-		return
-	}
-
-	respondSuccess(w, result)
+	h.respondJSON(w, http.StatusOK, map[string]any{
+		"message": "opportunities assigned successfully",
+	})
 }
 
 // ============================================================================
-// Statistics and Analytics
+// Statistics
 // ============================================================================
 
 // GetOpportunityStatistics handles GET /opportunities/statistics
 func (h *Handler) GetOpportunityStatistics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	pipelineID := getQueryUUID(r, "pipeline_id")
-	startDate := getQueryTime(r, "start_date")
-	endDate := getQueryTime(r, "end_date")
-
-	stats, err := h.opportunityUseCase.GetStatistics(ctx, tenantID, pipelineID, startDate, endDate)
+	tenantID, err := h.getTenantID(ctx)
 	if err != nil {
-		respondError(w, err)
+		h.respondError(w, ErrUnauthorized("tenant context required"))
 		return
 	}
 
-	respondSuccess(w, stats)
+	stats, err := h.opportunityUseCase.GetStatistics(ctx, tenantID)
+	if err != nil {
+		h.respondError(w, h.toError(err))
+		return
+	}
+
+	h.respondSuccess(w, http.StatusOK, stats)
 }
 
 // GetPipelineValue handles GET /opportunities/pipeline-value
 func (h *Handler) GetPipelineValue(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	pipelineID := getQueryUUID(r, "pipeline_id")
-	currency := getQueryString(r, "currency")
-	if currency == "" {
-		currency = "IDR"
-	}
-
-	value, err := h.opportunityUseCase.GetPipelineValue(ctx, tenantID, pipelineID, currency)
-	if err != nil {
-		respondError(w, err)
-		return
-	}
-
-	respondSuccess(w, value)
-}
-
-// GetOpportunitiesByPipeline handles GET /opportunities/by-pipeline/{pipelineId}
-func (h *Handler) GetOpportunitiesByPipeline(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	pipelineID, err := getUUIDParam(r, "pipelineId")
-	if err != nil {
-		respondError(w, err)
-		return
-	}
-
-	opts := buildListOptions(r)
-
-	opportunities, total, err := h.opportunityUseCase.GetByPipeline(ctx, tenantID, pipelineID, &opts)
-	if err != nil {
-		respondError(w, err)
-		return
-	}
-
-	respondList(w, opportunities, total, opts.Page, opts.PageSize)
-}
-
-// GetOpportunitiesByStage handles GET /opportunities/by-stage/{stageId}
-func (h *Handler) GetOpportunitiesByStage(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	stageID, err := getUUIDParam(r, "stageId")
-	if err != nil {
-		respondError(w, err)
-		return
-	}
-
-	pipelineID := getQueryUUID(r, "pipeline_id")
-	if pipelineID == nil {
-		respondError(w, ErrMissingParameter("pipeline_id"))
-		return
-	}
-
-	opts := buildListOptions(r)
-
-	opportunities, total, err := h.opportunityUseCase.GetByStage(ctx, tenantID, *pipelineID, stageID, &opts)
-	if err != nil {
-		respondError(w, err)
-		return
-	}
-
-	respondList(w, opportunities, total, opts.Page, opts.PageSize)
+	h.respondError(w, ErrUnprocessableEntity("pipeline value endpoint not yet implemented"))
 }
 
 // GetClosingThisMonth handles GET /opportunities/closing-this-month
 func (h *Handler) GetClosingThisMonth(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	tenantID := getTenantID(ctx)
-
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	opts := buildListOptions(r)
-
-	opportunities, total, err := h.opportunityUseCase.GetClosingThisMonth(ctx, tenantID, &opts)
-	if err != nil {
-		respondError(w, err)
-		return
-	}
-
-	respondList(w, opportunities, total, opts.Page, opts.PageSize)
+	h.respondError(w, ErrUnprocessableEntity("closing this month endpoint not yet implemented"))
 }
 
 // GetOverdueOpportunities handles GET /opportunities/overdue
 func (h *Handler) GetOverdueOpportunities(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	tenantID := getTenantID(ctx)
+	h.respondError(w, ErrUnprocessableEntity("overdue opportunities endpoint not yet implemented"))
+}
 
-	if tenantID == uuid.Nil {
-		respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
+// BulkMoveStage handles POST /opportunities/bulk/move-stage
+func (h *Handler) BulkMoveStage(w http.ResponseWriter, r *http.Request) {
+	h.respondError(w, ErrUnprocessableEntity("bulk move stage endpoint not yet implemented"))
+}
 
-	opts := buildListOptions(r)
+// MoveOpportunityToStage handles POST /opportunities/{opportunityId}/move-stage
+func (h *Handler) MoveOpportunityToStage(w http.ResponseWriter, r *http.Request) {
+	// Delegate to MoveOpportunityStage
+	h.MoveOpportunityStage(w, r)
+}
 
-	opportunities, total, err := h.opportunityUseCase.GetOverdue(ctx, tenantID, &opts)
-	if err != nil {
-		respondError(w, err)
-		return
-	}
+// GetOpportunityStageHistory handles GET /opportunities/{opportunityId}/stage-history
+func (h *Handler) GetOpportunityStageHistory(w http.ResponseWriter, r *http.Request) {
+	h.respondError(w, ErrUnprocessableEntity("stage history endpoint not yet implemented"))
+}
 
-	respondList(w, opportunities, total, opts.Page, opts.PageSize)
+// SetOpportunityPrimaryContact handles POST /opportunities/{opportunityId}/contacts/{contactId}/set-primary
+func (h *Handler) SetOpportunityPrimaryContact(w http.ResponseWriter, r *http.Request) {
+	h.respondError(w, ErrUnprocessableEntity("set primary contact endpoint not yet implemented"))
 }

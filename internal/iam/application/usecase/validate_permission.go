@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/application"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/application/ports"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/domain"
+	"github.com/kilang-desa-murni/crm/internal/iam/application"
+	"github.com/kilang-desa-murni/crm/internal/iam/application/ports"
+	"github.com/kilang-desa-murni/crm/internal/iam/domain"
 )
 
 // ValidatePermissionRequest represents a permission validation request.

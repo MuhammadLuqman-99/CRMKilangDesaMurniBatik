@@ -29,24 +29,26 @@ func (m *DealMapper) ToResponse(deal *domain.Deal) *dto.DealResponse {
 	}
 
 	response := &dto.DealResponse{
-		ID:         deal.ID.String(),
-		TenantID:   deal.TenantID.String(),
-		DealNumber: deal.Code,
-		Name:       deal.Name,
-		Status:     string(deal.Status),
-		CustomerID: deal.CustomerID.String(),
-		OwnerID:    deal.OwnerID.String(),
+		ID:           deal.ID.String(),
+		TenantID:     deal.TenantID.String(),
+		Code:         deal.Code,
+		Name:         deal.Name,
+		Status:       string(deal.Status),
+		CustomerID:   deal.CustomerID.String(),
+		CustomerName: deal.CustomerName,
+		OwnerID:      deal.OwnerID.String(),
+		Currency:     deal.Currency,
 		Subtotal: dto.MoneyDTO{
 			Amount:   deal.Subtotal.Amount,
 			Currency: deal.Subtotal.Currency,
 			Display:  formatMoney(deal.Subtotal),
 		},
-		DiscountAmount: dto.MoneyDTO{
+		TotalDiscount: dto.MoneyDTO{
 			Amount:   deal.TotalDiscount.Amount,
 			Currency: deal.TotalDiscount.Currency,
 			Display:  formatMoney(deal.TotalDiscount),
 		},
-		TaxAmount: dto.MoneyDTO{
+		TotalTax: dto.MoneyDTO{
 			Amount:   deal.TotalTax.Amount,
 			Currency: deal.TotalTax.Currency,
 			Display:  formatMoney(deal.TotalTax),
@@ -56,21 +58,20 @@ func (m *DealMapper) ToResponse(deal *domain.Deal) *dto.DealResponse {
 			Currency: deal.TotalAmount.Currency,
 			Display:  formatMoney(deal.TotalAmount),
 		},
-		TotalPaid: dto.MoneyDTO{
+		PaidAmount: dto.MoneyDTO{
 			Amount:   deal.PaidAmount.Amount,
 			Currency: deal.PaidAmount.Currency,
 			Display:  formatMoney(deal.PaidAmount),
 		},
-		TotalPending: dto.MoneyDTO{
+		OutstandingAmount: dto.MoneyDTO{
 			Amount:   deal.OutstandingAmount.Amount,
 			Currency: deal.OutstandingAmount.Currency,
 			Display:  formatMoney(deal.OutstandingAmount),
 		},
-		TotalInvoiced: m.calculateTotalInvoiced(deal),
-		PaymentTerms:  string(deal.PaymentTerm),
-		FulfillmentProgress: int(deal.FulfillmentProgress()),
-		FulfillmentStatus:   m.getFulfillmentStatus(deal),
-		PaymentStatus:       m.getPaymentStatus(deal),
+		PaymentTerm:         string(deal.PaymentTerm),
+		FulfillmentProgress: deal.FulfillmentProgress(),
+		PaymentProgress:     deal.PaymentProgress(),
+		IsFullyPaid:         deal.IsFullyPaid(),
 		Tags:                deal.Tags,
 		CustomFields:        deal.CustomFields,
 		CreatedAt:           deal.CreatedAt,
@@ -79,19 +80,14 @@ func (m *DealMapper) ToResponse(deal *domain.Deal) *dto.DealResponse {
 		Version:             deal.Version,
 	}
 
-	// Description
-	if deal.Description != "" {
-		response.Description = dto.StringPtr(deal.Description)
-	}
+	// Description and Notes are strings in DTO
+	response.Description = deal.Description
+	response.Notes = deal.Notes
 
-	// Notes
-	if deal.Notes != "" {
-		response.Notes = dto.StringPtr(deal.Notes)
-	}
-
-	// Opportunity
-	oppIDStr := deal.OpportunityID.String()
-	response.OpportunityID = &oppIDStr
+	// OpportunityID is string in DTO
+	response.OpportunityID = deal.OpportunityID.String()
+	response.PipelineID = deal.PipelineID.String()
+	response.WonReason = deal.WonReason
 
 	// Customer
 	response.Customer = &dto.CustomerBriefDTO{
@@ -100,6 +96,7 @@ func (m *DealMapper) ToResponse(deal *domain.Deal) *dto.DealResponse {
 	}
 
 	// Owner
+	response.OwnerName = deal.OwnerName
 	response.Owner = &dto.UserBriefDTO{
 		ID:   deal.OwnerID.String(),
 		Name: deal.OwnerName,
@@ -108,9 +105,10 @@ func (m *DealMapper) ToResponse(deal *domain.Deal) *dto.DealResponse {
 	// Primary contact
 	if deal.PrimaryContactID != nil {
 		contactIDStr := deal.PrimaryContactID.String()
-		response.BillingContactID = &contactIDStr
+		response.PrimaryContactID = &contactIDStr
+		response.PrimaryContactName = deal.PrimaryContactName
 		if deal.PrimaryContactName != "" {
-			response.BillingContact = &dto.ContactBriefDTO{
+			response.PrimaryContact = &dto.ContactBriefDTO{
 				ID:       deal.PrimaryContactID.String(),
 				FullName: deal.PrimaryContactName,
 			}
@@ -118,43 +116,40 @@ func (m *DealMapper) ToResponse(deal *domain.Deal) *dto.DealResponse {
 	}
 
 	// Contract details
+	response.ContractURL = deal.ContractURL
 	if deal.ContractURL != "" {
-		response.ContractNumber = dto.StringPtr(deal.ContractURL)
+		response.ContractNumber = &deal.ContractURL
 	}
 
-	// Line items
-	response.LineItems = m.mapLineItems(deal.LineItems, deal.Currency)
+	// Payment term days
+	response.PaymentTermDays = deal.PaymentTermDays
+
+	// Line items - use DealLineItemDTO
+	response.LineItems = m.mapLineItemsToDTO(deal.LineItems, deal.Currency)
 	response.LineItemCount = len(deal.LineItems)
 
-	// Invoices
-	response.Invoices = m.mapInvoices(deal.Invoices, deal.Currency)
+	// Invoices - use InvoiceDTO
+	response.Invoices = m.mapInvoicesToDTO(deal.Invoices, deal.Currency)
 	response.InvoiceCount = len(deal.Invoices)
 
-	// Payments
-	response.Payments = m.mapPayments(deal.Payments, deal.Currency)
+	// Payments - use PaymentDTO
+	response.Payments = m.mapPaymentsToDTO(deal.Payments, deal.Currency)
 	response.PaymentCount = len(deal.Payments)
 
-	// Shipping cost (use zero if not tracked separately)
-	zero, _ := domain.Zero(deal.Currency)
-	response.ShippingCost = dto.MoneyDTO{
-		Amount:   zero.Amount,
-		Currency: zero.Currency,
-		Display:  formatMoney(zero),
-	}
-
-	// Timeline dates
-	response.ClosedDate = &deal.WonAt
-	response.SignedDate = deal.Timeline.ContractDate
-	response.StartDate = deal.Timeline.StartDate
-	response.EndDate = deal.Timeline.EndDate
-
-	// Cancellation info
-	if deal.CancelledAt != nil {
-		response.CancelledAt = deal.CancelledAt
-		if deal.Status == domain.DealStatusCancelled {
-			response.CancelNotes = dto.StringPtr(deal.Notes)
+	// Timeline
+	if deal.Timeline.ContractDate != nil || deal.Timeline.StartDate != nil || deal.Timeline.EndDate != nil {
+		response.Timeline = &dto.DealTimelineDTO{
+			ContractDate: deal.Timeline.ContractDate,
+			StartDate:    deal.Timeline.StartDate,
+			EndDate:      deal.Timeline.EndDate,
 		}
 	}
+
+	// Status timestamps
+	if !deal.WonAt.IsZero() {
+		response.WonAt = &deal.WonAt
+	}
+	response.CancelledAt = deal.CancelledAt
 
 	return response
 }
@@ -165,25 +160,36 @@ func (m *DealMapper) ToBriefResponse(deal *domain.Deal) *dto.DealBriefResponse {
 		return nil
 	}
 
-	return &dto.DealBriefResponse{
-		ID:         deal.ID.String(),
-		DealNumber: deal.Code,
-		Name:       deal.Name,
-		Status:     string(deal.Status),
+	resp := &dto.DealBriefResponse{
+		ID:           deal.ID.String(),
+		Code:         deal.Code,
+		Name:         deal.Name,
+		Status:       string(deal.Status),
+		CustomerID:   deal.CustomerID.String(),
+		CustomerName: deal.CustomerName,
+		OwnerID:      deal.OwnerID.String(),
+		OwnerName:    deal.OwnerName,
 		TotalAmount: dto.MoneyDTO{
 			Amount:   deal.TotalAmount.Amount,
 			Currency: deal.TotalAmount.Currency,
 			Display:  formatMoney(deal.TotalAmount),
 		},
-		CustomerID:          deal.CustomerID.String(),
-		CustomerName:        deal.CustomerName,
-		OwnerID:             deal.OwnerID.String(),
-		OwnerName:           deal.OwnerName,
-		PaymentStatus:       m.getPaymentStatus(deal),
-		FulfillmentProgress: int(deal.FulfillmentProgress()),
-		ClosedDate:          &deal.WonAt,
+		OutstandingAmount: dto.MoneyDTO{
+			Amount:   deal.OutstandingAmount.Amount,
+			Currency: deal.OutstandingAmount.Currency,
+			Display:  formatMoney(deal.OutstandingAmount),
+		},
+		FulfillmentProgress: deal.FulfillmentProgress(),
+		PaymentProgress:     deal.PaymentProgress(),
+		IsFullyPaid:         deal.IsFullyPaid(),
 		CreatedAt:           deal.CreatedAt,
 	}
+
+	if !deal.WonAt.IsZero() {
+		resp.WonAt = &deal.WonAt
+	}
+
+	return resp
 }
 
 // ToListResponse maps a slice of Deal entities to DealListResponse DTO.
@@ -357,6 +363,128 @@ func (m *DealMapper) calculateTotalInvoiced(deal *domain.Deal) dto.MoneyDTO {
 	}
 }
 
+// mapLineItemsToDTO maps domain DealLineItem to DealLineItemDTO (domain-aligned).
+func (m *DealMapper) mapLineItemsToDTO(items []domain.DealLineItem, currency string) []*dto.DealLineItemDTO {
+	if len(items) == 0 {
+		return nil
+	}
+
+	result := make([]*dto.DealLineItemDTO, 0, len(items))
+	for _, item := range items {
+		lineItemDTO := &dto.DealLineItemDTO{
+			ID:          item.ID.String(),
+			ProductID:   item.ProductID.String(),
+			ProductName: item.ProductName,
+			ProductSKU:  item.ProductSKU,
+			Description: item.Description,
+			Quantity:    item.Quantity,
+			UnitPrice: dto.MoneyDTO{
+				Amount:   item.UnitPrice.Amount,
+				Currency: item.UnitPrice.Currency,
+				Display:  formatMoney(item.UnitPrice),
+			},
+			Discount: item.Discount,
+			Tax:      item.Tax,
+			Subtotal: dto.MoneyDTO{
+				Amount:   item.Subtotal.Amount,
+				Currency: item.Subtotal.Currency,
+				Display:  formatMoney(item.Subtotal),
+			},
+			TaxAmount: dto.MoneyDTO{
+				Amount:   item.TaxAmount.Amount,
+				Currency: item.TaxAmount.Currency,
+				Display:  formatMoney(item.TaxAmount),
+			},
+			Total: dto.MoneyDTO{
+				Amount:   item.Total.Amount,
+				Currency: item.Total.Currency,
+				Display:  formatMoney(item.Total),
+			},
+			FulfilledQty:      item.FulfilledQty,
+			RemainingQuantity: item.RemainingQuantity(),
+			IsFulfilled:       item.IsFulfilled(),
+			DeliveryDate:      item.DeliveryDate,
+			Notes:             item.Notes,
+		}
+		result = append(result, lineItemDTO)
+	}
+
+	return result
+}
+
+// mapInvoicesToDTO maps domain Invoice to InvoiceDTO (domain-aligned).
+func (m *DealMapper) mapInvoicesToDTO(invoices []domain.Invoice, currency string) []*dto.InvoiceDTO {
+	if len(invoices) == 0 {
+		return nil
+	}
+
+	result := make([]*dto.InvoiceDTO, 0, len(invoices))
+	for _, inv := range invoices {
+		invoiceDTO := &dto.InvoiceDTO{
+			ID:            inv.ID.String(),
+			InvoiceNumber: inv.InvoiceNumber,
+			Amount: dto.MoneyDTO{
+				Amount:   inv.Amount.Amount,
+				Currency: inv.Amount.Currency,
+				Display:  formatMoney(inv.Amount),
+			},
+			DueDate:  inv.DueDate,
+			Status:   inv.Status,
+			SentAt:   inv.SentAt,
+			PaidAt:   inv.PaidAt,
+			PaidAmount: dto.MoneyDTO{
+				Amount:   inv.PaidAmount.Amount,
+				Currency: inv.PaidAmount.Currency,
+				Display:  formatMoney(inv.PaidAmount),
+			},
+			OutstandingAmount: dto.MoneyDTO{
+				Amount:   inv.OutstandingAmount().Amount,
+				Currency: inv.OutstandingAmount().Currency,
+				Display:  formatMoney(inv.OutstandingAmount()),
+			},
+			IsOverdue: inv.IsOverdue(),
+			Notes:     inv.Notes,
+			CreatedAt: inv.CreatedAt,
+		}
+		result = append(result, invoiceDTO)
+	}
+
+	return result
+}
+
+// mapPaymentsToDTO maps domain Payment to PaymentDTO (domain-aligned).
+func (m *DealMapper) mapPaymentsToDTO(payments []domain.Payment, currency string) []*dto.PaymentDTO {
+	if len(payments) == 0 {
+		return nil
+	}
+
+	result := make([]*dto.PaymentDTO, 0, len(payments))
+	for _, pmt := range payments {
+		paymentDTO := &dto.PaymentDTO{
+			ID: pmt.ID.String(),
+			Amount: dto.MoneyDTO{
+				Amount:   pmt.Amount.Amount,
+				Currency: pmt.Amount.Currency,
+				Display:  formatMoney(pmt.Amount),
+			},
+			PaymentMethod: pmt.PaymentMethod,
+			Reference:     pmt.Reference,
+			ReceivedAt:    pmt.ReceivedAt,
+			ReceivedBy:    pmt.ReceivedBy.String(),
+			Notes:         pmt.Notes,
+		}
+
+		if pmt.InvoiceID != nil {
+			invoiceIDStr := pmt.InvoiceID.String()
+			paymentDTO.InvoiceID = &invoiceIDStr
+		}
+
+		result = append(result, paymentDTO)
+	}
+
+	return result
+}
+
 // getPaymentStatus determines the payment status of a deal.
 func (m *DealMapper) getPaymentStatus(deal *domain.Deal) string {
 	if deal.IsFullyPaid() {
@@ -396,30 +524,23 @@ func (m *DealMapper) ToLineItem(req *dto.AddLineItemRequest) (domain.DealLineIte
 		ID:           uuid.New(),
 		ProductID:    productID,
 		ProductName:  req.ProductName,
+		ProductSKU:   req.ProductSKU,
+		Description:  req.Description,
 		Quantity:     req.Quantity,
 		UnitPrice:    unitPrice,
-		DiscountType: "percentage",
-		TaxType:      "percentage",
+		Discount:     req.Discount,
+		DiscountType: req.DiscountType,
+		Tax:          req.Tax,
+		TaxType:      req.TaxType,
+		Notes:        req.Notes,
 	}
 
-	if req.ProductSKU != nil {
-		lineItem.ProductSKU = *req.ProductSKU
+	// Set default types if not provided
+	if lineItem.DiscountType == "" {
+		lineItem.DiscountType = "percentage"
 	}
-
-	if req.Description != nil {
-		lineItem.Description = *req.Description
-	}
-
-	if req.DiscountPercent != nil {
-		lineItem.Discount = float64(*req.DiscountPercent)
-	}
-
-	if req.TaxRate != nil {
-		lineItem.Tax = float64(*req.TaxRate) / 100 // Convert basis points to percentage
-	}
-
-	if req.Notes != nil {
-		lineItem.Notes = *req.Notes
+	if lineItem.TaxType == "" {
+		lineItem.TaxType = "percentage"
 	}
 
 	// Calculate totals
@@ -493,36 +614,6 @@ func (m *DealMapper) ToPaymentTerm(term string) domain.PaymentTerm {
 	}
 }
 
-// ToTimeline maps deal request to DealTimeline domain type.
-func (m *DealMapper) ToTimeline(req *dto.CreateDealRequest) (domain.DealTimeline, error) {
-	timeline := domain.DealTimeline{}
-
-	if req.SignedDate != nil {
-		signedDate, err := time.Parse("2006-01-02", *req.SignedDate)
-		if err != nil {
-			return timeline, err
-		}
-		timeline.ContractDate = &signedDate
-	}
-
-	if req.StartDate != nil {
-		startDate, err := time.Parse("2006-01-02", *req.StartDate)
-		if err != nil {
-			return timeline, err
-		}
-		timeline.StartDate = &startDate
-	}
-
-	if req.EndDate != nil {
-		endDate, err := time.Parse("2006-01-02", *req.EndDate)
-		if err != nil {
-			return timeline, err
-		}
-		timeline.EndDate = &endDate
-	}
-
-	return timeline, nil
-}
 
 // ParseInvoiceDueDate parses invoice due date string to time.Time.
 func (m *DealMapper) ParseInvoiceDueDate(dateStr string) (time.Time, error) {

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	iamhttp "github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/interfaces/http"
+	iamhttp "github.com/kilang-desa-murni/crm/internal/iam/interfaces/http"
 )
 
 // RateLimiter interface for rate limiting implementations.

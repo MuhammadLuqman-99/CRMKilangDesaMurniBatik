@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/application/dto"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/application/usecase"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/domain"
+	"github.com/kilang-desa-murni/crm/internal/customer/application/dto"
+	"github.com/kilang-desa-murni/crm/internal/customer/application/usecase"
+	"github.com/kilang-desa-murni/crm/internal/customer/domain"
 )
 
 // ============================================================================

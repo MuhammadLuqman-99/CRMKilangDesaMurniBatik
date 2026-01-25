@@ -8,7 +8,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/domain"
+	"github.com/kilang-desa-murni/crm/internal/customer/domain"
 )
 
 // sessionContextKey is the key used to store the MongoDB session in context.

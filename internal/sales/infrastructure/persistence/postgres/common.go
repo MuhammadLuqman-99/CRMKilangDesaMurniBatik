@@ -484,6 +484,18 @@ func IsCheckViolation(err error) bool {
 }
 
 // ============================================================================
+// Null Value Helpers
+// ============================================================================
+
+// nullStringValue extracts the string value from sql.NullString.
+func nullStringValue(ns sql.NullString) string {
+	if ns.Valid {
+		return ns.String
+	}
+	return ""
+}
+
+// ============================================================================
 // Sorting Helpers
 // ============================================================================
 

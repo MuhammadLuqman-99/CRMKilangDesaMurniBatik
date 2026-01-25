@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	iamhttp "github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/interfaces/http"
+	iamhttp "github.com/kilang-desa-murni/crm/internal/iam/interfaces/http"
 )
 
 // RequestID middleware adds a unique request ID to each request.

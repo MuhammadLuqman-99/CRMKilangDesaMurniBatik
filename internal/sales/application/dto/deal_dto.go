@@ -11,59 +11,20 @@ import (
 // CreateDealRequest represents a request to create a new deal.
 type CreateDealRequest struct {
 	// Basic Information
-	Name        string  `json:"name" validate:"required,min=1,max=200"`
-	Description *string `json:"description,omitempty" validate:"omitempty,max=5000"`
+	Name        string `json:"name" validate:"required,min=1,max=200"`
+	Description string `json:"description,omitempty" validate:"omitempty,max=5000"`
 
-	// Source
-	OpportunityID *string `json:"opportunity_id,omitempty" validate:"omitempty,uuid"`
+	// Source - OpportunityID is required for creating a deal
+	OpportunityID string `json:"opportunity_id" validate:"required,uuid"`
 
-	// Customer
-	CustomerID string `json:"customer_id" validate:"required,uuid"`
-
-	// Value
-	TotalAmount int64  `json:"total_amount" validate:"required,min=0"`
-	Currency    string `json:"currency" validate:"required,len=3"`
-
-	// Line Items
-	LineItems []*DealLineItemRequestDTO `json:"line_items,omitempty" validate:"omitempty,max=100,dive"`
-
-	// Dates
-	ClosedDate *string `json:"closed_date,omitempty" validate:"omitempty,datetime=2006-01-02"`
-	SignedDate *string `json:"signed_date,omitempty" validate:"omitempty,datetime=2006-01-02"`
-	StartDate  *string `json:"start_date,omitempty" validate:"omitempty,datetime=2006-01-02"`
-	EndDate    *string `json:"end_date,omitempty" validate:"omitempty,datetime=2006-01-02"`
-
-	// Assignment
-	OwnerID *string `json:"owner_id,omitempty" validate:"omitempty,uuid"`
-
-	// Contract Details
-	ContractNumber *string `json:"contract_number,omitempty" validate:"omitempty,max=100"`
-	ContractTerms  *string `json:"contract_terms,omitempty" validate:"omitempty,max=5000"`
-	PaymentTerms   *string `json:"payment_terms,omitempty" validate:"omitempty,oneof=net_15 net_30 net_45 net_60 net_90 due_on_receipt prepaid custom"`
-	PaymentMethod  *string `json:"payment_method,omitempty" validate:"omitempty,oneof=credit_card bank_transfer check cash wire_transfer other"`
-
-	// Billing
-	BillingContactID *string     `json:"billing_contact_id,omitempty" validate:"omitempty,uuid"`
-	BillingAddress   *AddressDTO `json:"billing_address,omitempty"`
-
-	// Shipping
-	ShippingContactID *string     `json:"shipping_contact_id,omitempty" validate:"omitempty,uuid"`
-	ShippingAddress   *AddressDTO `json:"shipping_address,omitempty"`
-	ShippingMethod    *string     `json:"shipping_method,omitempty" validate:"omitempty,max=100"`
-	ShippingCost      *int64      `json:"shipping_cost,omitempty" validate:"omitempty,min=0"`
-
-	// Tax
-	TaxRate   *int   `json:"tax_rate,omitempty" validate:"omitempty,min=0,max=10000"` // basis points
-	TaxAmount *int64 `json:"tax_amount,omitempty" validate:"omitempty,min=0"`
-
-	// Discounts
-	DiscountPercent *int   `json:"discount_percent,omitempty" validate:"omitempty,min=0,max=100"`
-	DiscountAmount  *int64 `json:"discount_amount,omitempty" validate:"omitempty,min=0"`
+	// Payment Terms
+	PaymentTerm     string `json:"payment_term,omitempty" validate:"omitempty,oneof=net_15 net_30 net_45 net_60 net_90 due_on_receipt prepaid custom"`
+	PaymentTermDays int    `json:"payment_term_days,omitempty" validate:"omitempty,min=0,max=365"`
 
 	// Additional Information
 	Tags         []string               `json:"tags,omitempty" validate:"omitempty,max=20,dive,max=50"`
 	CustomFields map[string]interface{} `json:"custom_fields,omitempty"`
-	Notes        *string                `json:"notes,omitempty" validate:"omitempty,max=5000"`
+	Notes        string                 `json:"notes,omitempty" validate:"omitempty,max=5000"`
 }
 
 // UpdateDealRequest represents a request to update a deal.
@@ -72,25 +33,9 @@ type UpdateDealRequest struct {
 	Name        *string `json:"name,omitempty" validate:"omitempty,min=1,max=200"`
 	Description *string `json:"description,omitempty" validate:"omitempty,max=5000"`
 
-	// Dates
-	SignedDate *string `json:"signed_date,omitempty" validate:"omitempty,datetime=2006-01-02"`
-	StartDate  *string `json:"start_date,omitempty" validate:"omitempty,datetime=2006-01-02"`
-	EndDate    *string `json:"end_date,omitempty" validate:"omitempty,datetime=2006-01-02"`
-
-	// Contract Details
-	ContractNumber *string `json:"contract_number,omitempty" validate:"omitempty,max=100"`
-	ContractTerms  *string `json:"contract_terms,omitempty" validate:"omitempty,max=5000"`
-	PaymentTerms   *string `json:"payment_terms,omitempty" validate:"omitempty,oneof=net_15 net_30 net_45 net_60 net_90 due_on_receipt prepaid custom"`
-	PaymentMethod  *string `json:"payment_method,omitempty" validate:"omitempty,oneof=credit_card bank_transfer check cash wire_transfer other"`
-
-	// Billing
-	BillingContactID *string     `json:"billing_contact_id,omitempty" validate:"omitempty,uuid"`
-	BillingAddress   *AddressDTO `json:"billing_address,omitempty"`
-
-	// Shipping
-	ShippingContactID *string     `json:"shipping_contact_id,omitempty" validate:"omitempty,uuid"`
-	ShippingAddress   *AddressDTO `json:"shipping_address,omitempty"`
-	ShippingMethod    *string     `json:"shipping_method,omitempty" validate:"omitempty,max=100"`
+	// Payment Terms
+	PaymentTerm     *string `json:"payment_term,omitempty" validate:"omitempty,oneof=net_15 net_30 net_45 net_60 net_90 due_on_receipt prepaid custom"`
+	PaymentTermDays *int    `json:"payment_term_days,omitempty" validate:"omitempty,min=0,max=365"`
 
 	// Additional Information
 	Tags         []string               `json:"tags,omitempty" validate:"omitempty,max=20,dive,max=50"`
@@ -103,29 +48,29 @@ type UpdateDealRequest struct {
 
 // AddLineItemRequest represents a request to add a line item to a deal.
 type AddLineItemRequest struct {
-	ProductID       string  `json:"product_id" validate:"required,uuid"`
-	ProductName     string  `json:"product_name" validate:"required,max=200"`
-	ProductSKU      *string `json:"product_sku,omitempty" validate:"omitempty,max=100"`
-	Description     *string `json:"description,omitempty" validate:"omitempty,max=1000"`
-	Quantity        int     `json:"quantity" validate:"required,min=1"`
-	UnitPrice       int64   `json:"unit_price" validate:"required,min=0"`
-	Currency        string  `json:"currency" validate:"required,len=3"`
-	DiscountPercent *int    `json:"discount_percent,omitempty" validate:"omitempty,min=0,max=100"`
-	DiscountAmount  *int64  `json:"discount_amount,omitempty" validate:"omitempty,min=0"`
-	TaxRate         *int    `json:"tax_rate,omitempty" validate:"omitempty,min=0,max=10000"` // basis points
-	Notes           *string `json:"notes,omitempty" validate:"omitempty,max=500"`
+	ProductID    string  `json:"product_id" validate:"required,uuid"`
+	ProductName  string  `json:"product_name" validate:"required,max=200"`
+	ProductSKU   string  `json:"product_sku,omitempty" validate:"omitempty,max=100"`
+	Description  string  `json:"description,omitempty" validate:"omitempty,max=1000"`
+	Quantity     int     `json:"quantity" validate:"required,min=1"`
+	UnitPrice    int64   `json:"unit_price" validate:"required,min=0"`
+	Currency     string  `json:"currency" validate:"required,len=3"`
+	Discount     float64 `json:"discount,omitempty" validate:"omitempty,min=0"`
+	DiscountType string  `json:"discount_type,omitempty" validate:"omitempty,oneof=percentage fixed"`
+	Tax          float64 `json:"tax,omitempty" validate:"omitempty,min=0"`
+	TaxType      string  `json:"tax_type,omitempty" validate:"omitempty,oneof=percentage fixed"`
+	Notes        string  `json:"notes,omitempty" validate:"omitempty,max=500"`
 }
 
 // UpdateLineItemRequest represents a request to update a line item.
 type UpdateLineItemRequest struct {
-	ProductName     *string `json:"product_name,omitempty" validate:"omitempty,max=200"`
-	Description     *string `json:"description,omitempty" validate:"omitempty,max=1000"`
-	Quantity        *int    `json:"quantity,omitempty" validate:"omitempty,min=1"`
-	UnitPrice       *int64  `json:"unit_price,omitempty" validate:"omitempty,min=0"`
-	DiscountPercent *int    `json:"discount_percent,omitempty" validate:"omitempty,min=0,max=100"`
-	DiscountAmount  *int64  `json:"discount_amount,omitempty" validate:"omitempty,min=0"`
-	TaxRate         *int    `json:"tax_rate,omitempty" validate:"omitempty,min=0,max=10000"`
-	Notes           *string `json:"notes,omitempty" validate:"omitempty,max=500"`
+	ProductName *string  `json:"product_name,omitempty" validate:"omitempty,max=200"`
+	Description *string  `json:"description,omitempty" validate:"omitempty,max=1000"`
+	Quantity    *int     `json:"quantity,omitempty" validate:"omitempty,min=1"`
+	UnitPrice   *int64   `json:"unit_price,omitempty" validate:"omitempty,min=0"`
+	Discount    *float64 `json:"discount,omitempty" validate:"omitempty,min=0"`
+	Tax         *float64 `json:"tax,omitempty" validate:"omitempty,min=0"`
+	Notes       *string  `json:"notes,omitempty" validate:"omitempty,max=500"`
 }
 
 // GenerateInvoiceRequest represents a request to generate an invoice.
@@ -232,113 +177,116 @@ type DealFilterRequest struct {
 
 // DealResponse represents a deal in API responses.
 type DealResponse struct {
-	ID         string `json:"id"`
-	TenantID   string `json:"tenant_id"`
-	DealNumber string `json:"deal_number"`
+	ID       string `json:"id"`
+	TenantID string `json:"tenant_id"`
+	Code     string `json:"code"`
 
 	// Basic Information
-	Name        string  `json:"name"`
-	Description *string `json:"description,omitempty"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 
 	// Status
 	Status string `json:"status"`
 
 	// Source
-	OpportunityID *string                   `json:"opportunity_id,omitempty"`
+	OpportunityID string                    `json:"opportunity_id"`
 	Opportunity   *OpportunityBriefResponse `json:"opportunity,omitempty"`
+	PipelineID    string                    `json:"pipeline_id"`
+	WonReason     string                    `json:"won_reason,omitempty"`
 
 	// Customer
-	CustomerID string            `json:"customer_id"`
-	Customer   *CustomerBriefDTO `json:"customer,omitempty"`
+	CustomerID   string            `json:"customer_id"`
+	CustomerName string            `json:"customer_name"`
+	Customer     *CustomerBriefDTO `json:"customer,omitempty"`
 
-	// Value Summary
-	Subtotal       MoneyDTO `json:"subtotal"`
-	DiscountAmount MoneyDTO `json:"discount_amount"`
-	TaxAmount      MoneyDTO `json:"tax_amount"`
-	ShippingCost   MoneyDTO `json:"shipping_cost"`
-	TotalAmount    MoneyDTO `json:"total_amount"`
-
-	// Line Items
-	LineItems     []*DealLineItemResponseDTO `json:"line_items,omitempty"`
-	LineItemCount int                        `json:"line_item_count"`
-
-	// Dates
-	ClosedDate *time.Time `json:"closed_date,omitempty"`
-	SignedDate *time.Time `json:"signed_date,omitempty"`
-	StartDate  *time.Time `json:"start_date,omitempty"`
-	EndDate    *time.Time `json:"end_date,omitempty"`
+	// Primary Contact
+	PrimaryContactID   *string          `json:"primary_contact_id,omitempty"`
+	PrimaryContactName string           `json:"primary_contact_name,omitempty"`
+	PrimaryContact     *ContactBriefDTO `json:"primary_contact,omitempty"`
 
 	// Assignment
-	OwnerID string        `json:"owner_id"`
-	Owner   *UserBriefDTO `json:"owner,omitempty"`
+	OwnerID   string        `json:"owner_id"`
+	OwnerName string        `json:"owner_name"`
+	Owner     *UserBriefDTO `json:"owner,omitempty"`
+	TeamID    *string       `json:"team_id,omitempty"`
 
-	// Contract Details
+	// Currency
+	Currency string `json:"currency"`
+
+	// Value Summary
+	Subtotal          MoneyDTO `json:"subtotal"`
+	TotalDiscount     MoneyDTO `json:"total_discount"`
+	TotalTax          MoneyDTO `json:"total_tax"`
+	TotalAmount       MoneyDTO `json:"total_amount"`
+	PaidAmount        MoneyDTO `json:"paid_amount"`
+	OutstandingAmount MoneyDTO `json:"outstanding_amount"`
+
+	// Payment Terms
+	PaymentTerm     string `json:"payment_term"`
+	PaymentTermDays int    `json:"payment_term_days"`
+
+	// Payment Progress
+	PaymentProgress float64 `json:"payment_progress"` // percentage
+	IsFullyPaid     bool    `json:"is_fully_paid"`
+
+	// Line Items
+	LineItems     []*DealLineItemDTO `json:"line_items,omitempty"`
+	LineItemCount int                `json:"line_item_count"`
+
+	// Timeline
+	Timeline *DealTimelineDTO `json:"timeline,omitempty"`
+
+	// Contract
+	ContractURL    string  `json:"contract_url,omitempty"`
 	ContractNumber *string `json:"contract_number,omitempty"`
 	ContractTerms  *string `json:"contract_terms,omitempty"`
-	PaymentTerms   string  `json:"payment_terms"`
-	PaymentMethod  *string `json:"payment_method,omitempty"`
-
-	// Billing
-	BillingContactID *string          `json:"billing_contact_id,omitempty"`
-	BillingContact   *ContactBriefDTO `json:"billing_contact,omitempty"`
-	BillingAddress   *AddressDTO      `json:"billing_address,omitempty"`
-
-	// Shipping
-	ShippingContactID *string          `json:"shipping_contact_id,omitempty"`
-	ShippingContact   *ContactBriefDTO `json:"shipping_contact,omitempty"`
-	ShippingAddress   *AddressDTO      `json:"shipping_address,omitempty"`
-	ShippingMethod    *string          `json:"shipping_method,omitempty"`
 
 	// Invoicing
-	Invoices       []*InvoiceResponseDTO `json:"invoices,omitempty"`
-	TotalInvoiced  MoneyDTO              `json:"total_invoiced"`
-	InvoiceCount   int                   `json:"invoice_count"`
+	Invoices            []*InvoiceDTO `json:"invoices,omitempty"`
+	InvoiceCount        int           `json:"invoice_count"`
+	OverdueInvoiceCount int           `json:"overdue_invoice_count"`
 
 	// Payments
-	Payments      []*PaymentResponseDTO `json:"payments,omitempty"`
-	TotalPaid     MoneyDTO              `json:"total_paid"`
-	TotalPending  MoneyDTO              `json:"total_pending"`
-	PaymentCount  int                   `json:"payment_count"`
-	PaymentStatus string                `json:"payment_status"` // unpaid, partial, paid, overpaid
+	Payments     []*PaymentDTO `json:"payments,omitempty"`
+	PaymentCount int           `json:"payment_count"`
 
 	// Fulfillment
-	FulfillmentProgress int                       `json:"fulfillment_progress"` // percentage
-	FulfillmentStatus   string                    `json:"fulfillment_status"`   // unfulfilled, partial, fulfilled
-	Fulfillments        []*FulfillmentResponseDTO `json:"fulfillments,omitempty"`
+	FulfillmentProgress float64 `json:"fulfillment_progress"` // percentage
 
-	// Cancellation
-	CancelledAt     *time.Time `json:"cancelled_at,omitempty"`
-	CancelledBy     *string    `json:"cancelled_by,omitempty"`
-	CancelReason    *string    `json:"cancel_reason,omitempty"`
-	CancelNotes     *string    `json:"cancel_notes,omitempty"`
+	// Status Timestamps
+	WonAt       *time.Time `json:"won_at,omitempty"`
+	ActivatedAt *time.Time `json:"activated_at,omitempty"`
+	FulfilledAt *time.Time `json:"fulfilled_at,omitempty"`
+	CancelledAt *time.Time `json:"cancelled_at,omitempty"`
 
 	// Additional Information
 	Tags         []string               `json:"tags,omitempty"`
 	CustomFields map[string]interface{} `json:"custom_fields,omitempty"`
-	Notes        *string                `json:"notes,omitempty"`
+	Notes        string                 `json:"notes,omitempty"`
 
 	// Timestamps
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	CreatedBy string    `json:"created_by"`
-	UpdatedBy string    `json:"updated_by"`
 	Version   int       `json:"version"`
 }
 
 // DealBriefResponse represents a brief deal summary.
 type DealBriefResponse struct {
 	ID                  string     `json:"id"`
-	DealNumber          string     `json:"deal_number"`
+	Code                string     `json:"code"`
 	Name                string     `json:"name"`
 	Status              string     `json:"status"`
-	TotalAmount         MoneyDTO   `json:"total_amount"`
 	CustomerID          string     `json:"customer_id"`
 	CustomerName        string     `json:"customer_name"`
 	OwnerID             string     `json:"owner_id"`
 	OwnerName           string     `json:"owner_name"`
-	PaymentStatus       string     `json:"payment_status"`
-	FulfillmentProgress int        `json:"fulfillment_progress"`
-	ClosedDate          *time.Time `json:"closed_date,omitempty"`
+	TotalAmount         MoneyDTO   `json:"total_amount"`
+	OutstandingAmount   MoneyDTO   `json:"outstanding_amount"`
+	FulfillmentProgress float64    `json:"fulfillment_progress"`
+	PaymentProgress     float64    `json:"payment_progress"`
+	IsFullyPaid         bool       `json:"is_fully_paid"`
+	WonAt               *time.Time `json:"won_at,omitempty"`
 	CreatedAt           time.Time  `json:"created_at"`
 }
 
@@ -437,6 +385,79 @@ type FulfillmentResponseDTO struct {
 	CarrierName    *string   `json:"carrier_name,omitempty"`
 	Notes          *string   `json:"notes,omitempty"`
 	FulfilledBy    string    `json:"fulfilled_by"`
+}
+
+// ============================================================================
+// Domain-Aligned DTOs (for use case responses)
+// ============================================================================
+
+// DealTimelineDTO represents the timeline of a deal.
+type DealTimelineDTO struct {
+	QuoteDate       *time.Time `json:"quote_date,omitempty"`
+	ContractDate    *time.Time `json:"contract_date,omitempty"`
+	StartDate       *time.Time `json:"start_date,omitempty"`
+	EndDate         *time.Time `json:"end_date,omitempty"`
+	RenewalDate     *time.Time `json:"renewal_date,omitempty"`
+	FirstPaymentDue *time.Time `json:"first_payment_due,omitempty"`
+}
+
+// DealLineItemDTO represents a line item in a deal (domain-aligned).
+type DealLineItemDTO struct {
+	ID                string     `json:"id"`
+	ProductID         string     `json:"product_id"`
+	ProductName       string     `json:"product_name"`
+	ProductSKU        string     `json:"product_sku,omitempty"`
+	Description       string     `json:"description,omitempty"`
+	Quantity          int        `json:"quantity"`
+	UnitPrice         MoneyDTO   `json:"unit_price"`
+	Discount          float64    `json:"discount"`
+	DiscountType      string     `json:"discount_type,omitempty"` // percentage, fixed
+	Tax               float64    `json:"tax"`
+	TaxType           string     `json:"tax_type,omitempty"` // percentage, fixed
+	Subtotal          MoneyDTO   `json:"subtotal"`
+	TaxAmount         MoneyDTO   `json:"tax_amount"`
+	Total             MoneyDTO   `json:"total"`
+	FulfilledQty      int        `json:"fulfilled_qty"`
+	RemainingQuantity int        `json:"remaining_quantity"`
+	IsFulfilled       bool       `json:"is_fulfilled"`
+	DeliveryDate      *time.Time `json:"delivery_date,omitempty"`
+	Notes             string     `json:"notes,omitempty"`
+}
+
+// InvoiceDTO represents an invoice in a deal (domain-aligned).
+type InvoiceDTO struct {
+	ID                string     `json:"id"`
+	InvoiceNumber     string     `json:"invoice_number"`
+	Amount            MoneyDTO   `json:"amount"`
+	DueDate           time.Time  `json:"due_date"`
+	Status            string     `json:"status"` // draft, sent, paid, overdue, cancelled
+	SentAt            *time.Time `json:"sent_at,omitempty"`
+	PaidAt            *time.Time `json:"paid_at,omitempty"`
+	PaidAmount        MoneyDTO   `json:"paid_amount"`
+	OutstandingAmount MoneyDTO   `json:"outstanding_amount"`
+	IsOverdue         bool       `json:"is_overdue"`
+	Notes             string     `json:"notes,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+}
+
+// PaymentDTO represents a payment in a deal (domain-aligned).
+type PaymentDTO struct {
+	ID            string    `json:"id"`
+	InvoiceID     *string   `json:"invoice_id,omitempty"`
+	Amount        MoneyDTO  `json:"amount"`
+	PaymentMethod string    `json:"payment_method"`
+	Reference     string    `json:"reference,omitempty"`
+	ReceivedAt    time.Time `json:"received_at"`
+	ReceivedBy    string    `json:"received_by"`
+	Notes         string    `json:"notes,omitempty"`
+}
+
+// CreateInvoiceRequest represents a request to create an invoice.
+type CreateInvoiceRequest struct {
+	InvoiceNumber string `json:"invoice_number" validate:"required,max=100"`
+	Amount        int64  `json:"amount" validate:"required,min=1"`
+	DueDate       string `json:"due_date" validate:"required,datetime=2006-01-02"`
+	Notes         string `json:"notes,omitempty" validate:"omitempty,max=2000"`
 }
 
 // DealStatisticsResponse represents deal statistics.

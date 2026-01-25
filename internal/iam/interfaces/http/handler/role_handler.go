@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/application/usecase"
-	iamhttp "github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/interfaces/http"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/interfaces/http/middleware"
+	"github.com/kilang-desa-murni/crm/internal/iam/application/usecase"
+	iamhttp "github.com/kilang-desa-murni/crm/internal/iam/interfaces/http"
+	"github.com/kilang-desa-murni/crm/internal/iam/interfaces/http/middleware"
 )
 
 // RoleHandler handles role-related HTTP requests.

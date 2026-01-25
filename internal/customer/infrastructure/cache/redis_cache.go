@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/application/ports"
+	"github.com/kilang-desa-murni/crm/internal/customer/application/ports"
 )
 
 // RedisCacheConfig holds Redis cache configuration.

@@ -286,18 +286,17 @@ func (es *EventStore) Save(ctx context.Context, events ...domain.DomainEvent) er
 		)`
 
 	for _, event := range events {
-		eventData, err := json.Marshal(event.Data())
+		// Serialize the entire event as event data
+		eventData, err := json.Marshal(event)
 		if err != nil {
 			return fmt.Errorf("failed to marshal event data: %w", err)
 		}
 
-		metadata, err := json.Marshal(event.Metadata())
-		if err != nil {
-			return fmt.Errorf("failed to marshal event metadata: %w", err)
-		}
+		// Empty metadata - could be extended if needed
+		metadata := []byte("{}")
 
 		_, err = executor.ExecContext(ctx, query,
-			event.ID().String(),
+			event.EventID().String(),
 			event.TenantID().String(),
 			event.AggregateID().String(),
 			event.AggregateType(),
@@ -467,12 +466,16 @@ type storedEvent struct {
 	occurredAt    time.Time
 }
 
-func (e *storedEvent) ID() uuid.UUID               { return e.id }
-func (e *storedEvent) TenantID() uuid.UUID         { return e.tenantID }
-func (e *storedEvent) AggregateID() uuid.UUID      { return e.aggregateID }
-func (e *storedEvent) AggregateType() string       { return e.aggregateType }
-func (e *storedEvent) EventType() string           { return e.eventType }
-func (e *storedEvent) Data() interface{}           { return e.data }
+func (e *storedEvent) EventID() uuid.UUID      { return e.id }
+func (e *storedEvent) TenantID() uuid.UUID     { return e.tenantID }
+func (e *storedEvent) AggregateID() uuid.UUID  { return e.aggregateID }
+func (e *storedEvent) AggregateType() string   { return e.aggregateType }
+func (e *storedEvent) EventType() string       { return e.eventType }
+func (e *storedEvent) Version() int            { return e.version }
+func (e *storedEvent) OccurredAt() time.Time   { return e.occurredAt }
+
+// Data returns the event data (for internal use, not part of DomainEvent interface).
+func (e *storedEvent) Data() map[string]interface{} { return e.data }
+
+// Metadata returns the event metadata (for internal use, not part of DomainEvent interface).
 func (e *storedEvent) Metadata() map[string]string { return e.metadata }
-func (e *storedEvent) Version() int                { return e.version }
-func (e *storedEvent) OccurredAt() time.Time       { return e.occurredAt }

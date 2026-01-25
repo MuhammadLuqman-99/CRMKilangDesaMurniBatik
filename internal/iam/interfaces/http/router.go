@@ -9,8 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/interfaces/http/handler"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/interfaces/http/middleware"
+	"github.com/kilang-desa-murni/crm/internal/iam/interfaces/http/handler"
+	"github.com/kilang-desa-murni/crm/internal/iam/interfaces/http/middleware"
 )
 
 // RouterConfig holds configuration for the router.

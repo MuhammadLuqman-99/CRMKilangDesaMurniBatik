@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/domain"
+	"github.com/kilang-desa-murni/crm/internal/iam/domain"
 )
 
 // RefreshTokenRow represents a refresh token database row.

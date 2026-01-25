@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/zap"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/application/usecase"
+	"github.com/kilang-desa-murni/crm/internal/customer/application/usecase"
 )
 
 // RouterConfig contains configuration for the router.

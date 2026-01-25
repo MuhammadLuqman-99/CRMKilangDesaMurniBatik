@@ -2,14 +2,15 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 
-	"crm-kilang-desa-murni-batik/internal/sales/application"
-	"crm-kilang-desa-murni-batik/internal/sales/application/dto"
-	"crm-kilang-desa-murni-batik/internal/sales/application/ports"
-	"crm-kilang-desa-murni-batik/internal/sales/domain"
+	"github.com/kilang-desa-murni/crm/internal/sales/application"
+	"github.com/kilang-desa-murni/crm/internal/sales/application/dto"
+	"github.com/kilang-desa-murni/crm/internal/sales/application/ports"
+	"github.com/kilang-desa-murni/crm/internal/sales/domain"
 )
 
 // ============================================================================
@@ -28,21 +29,15 @@ type LeadUseCase interface {
 	// Status operations
 	Qualify(ctx context.Context, tenantID, leadID, userID uuid.UUID, req *dto.QualifyLeadRequest) (*dto.LeadResponse, error)
 	Disqualify(ctx context.Context, tenantID, leadID, userID uuid.UUID, req *dto.DisqualifyLeadRequest) (*dto.LeadResponse, error)
-	Contact(ctx context.Context, tenantID, leadID, userID uuid.UUID) (*dto.LeadResponse, error)
+	Convert(ctx context.Context, tenantID, leadID, userID uuid.UUID, req *dto.ConvertLeadRequest) (*dto.LeadConversionResponse, error)
 	Nurture(ctx context.Context, tenantID, leadID, userID uuid.UUID, req *dto.NurtureLeadRequest) (*dto.LeadResponse, error)
 
 	// Assignment
 	Assign(ctx context.Context, tenantID, leadID, userID uuid.UUID, req *dto.AssignLeadRequest) (*dto.LeadResponse, error)
-	BulkAssign(ctx context.Context, tenantID, userID uuid.UUID, req *dto.BulkAssignLeadsRequest) error
+	BulkAssign(ctx context.Context, tenantID, userID uuid.UUID, req *dto.BulkAssignLeadsRequest) (int, error)
 
 	// Scoring
 	UpdateScore(ctx context.Context, tenantID, leadID, userID uuid.UUID, req *dto.ScoreLeadRequest) (*dto.LeadResponse, error)
-
-	// Conversion
-	ConvertToOpportunity(ctx context.Context, tenantID, leadID, userID uuid.UUID, req *dto.ConvertLeadRequest) (*dto.LeadConversionResponse, error)
-
-	// Bulk operations
-	BulkUpdateStatus(ctx context.Context, tenantID, userID uuid.UUID, req *dto.BulkUpdateLeadStatusRequest) error
 
 	// Statistics
 	GetStatistics(ctx context.Context, tenantID uuid.UUID) (*dto.LeadStatisticsResponse, error)
@@ -90,131 +85,68 @@ func NewLeadUseCase(
 	}
 }
 
-// ============================================================================
-// CRUD Operations
-// ============================================================================
-
 // Create creates a new lead.
 func (uc *leadUseCase) Create(ctx context.Context, tenantID, userID uuid.UUID, req *dto.CreateLeadRequest) (*dto.LeadResponse, error) {
-	// Check for duplicate email
-	existingLead, err := uc.leadRepo.GetByEmail(ctx, tenantID, req.Email)
-	if err == nil && existingLead != nil {
-		return nil, application.ErrLeadDuplicateEmail(req.Email)
+	// Build contact information
+	contact := domain.LeadContact{
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Email:     req.Email,
+	}
+	if req.Phone != nil {
+		contact.Phone = *req.Phone
+	}
+	if req.Mobile != nil {
+		contact.Mobile = *req.Mobile
+	}
+	if req.JobTitle != nil {
+		contact.JobTitle = *req.JobTitle
+	}
+	if req.Department != nil {
+		contact.Department = *req.Department
 	}
 
-	// Parse owner ID if provided
-	var ownerID *uuid.UUID
-	if req.OwnerID != nil {
-		parsedOwnerID, err := uuid.Parse(*req.OwnerID)
-		if err != nil {
-			return nil, application.ErrValidation("invalid owner_id format")
+	// Build company information
+	company := domain.LeadCompany{}
+	if req.Company != nil {
+		company.Name = *req.Company
+	}
+	if req.CompanySize != nil {
+		company.Size = *req.CompanySize
+	}
+	if req.Industry != nil {
+		company.Industry = *req.Industry
+	}
+	if req.Website != nil {
+		company.Website = *req.Website
+	}
+	if req.Address != nil {
+		company.Address = req.Address.Street1
+		company.City = req.Address.City
+		if req.Address.State != nil {
+			company.State = *req.Address.State
 		}
-		// Verify owner exists
-		exists, err := uc.userService.UserExists(ctx, tenantID, parsedOwnerID)
-		if err != nil {
-			return nil, application.WrapError(application.ErrCodeUserServiceError, "failed to verify owner", err)
+		company.Country = req.Address.Country
+		if req.Address.PostalCode != nil {
+			company.PostalCode = *req.Address.PostalCode
 		}
-		if !exists {
-			return nil, application.ErrUserNotFound(parsedOwnerID)
-		}
-		ownerID = &parsedOwnerID
 	}
 
-	// Parse campaign ID if provided
-	var campaignID *uuid.UUID
-	if req.CampaignID != nil {
-		parsedCampaignID, err := uuid.Parse(*req.CampaignID)
-		if err != nil {
-			return nil, application.ErrValidation("invalid campaign_id format")
-		}
-		campaignID = &parsedCampaignID
+	// Parse source
+	source := domain.LeadSource(req.Source)
+	if !source.IsValid() {
+		source = domain.LeadSourceOther
 	}
 
-	// Map source
-	source := mapLeadSource(req.Source)
-
-	// Create lead entity
-	lead, err := domain.NewLead(
-		tenantID,
-		req.FirstName,
-		req.LastName,
-		req.Email,
-		source,
-		userID,
-	)
+	// Create lead
+	lead, err := domain.NewLead(tenantID, contact, company, source, userID)
 	if err != nil {
-		return nil, application.WrapError(application.ErrCodeValidation, "failed to create lead", err)
+		return nil, application.ErrValidation(err.Error())
 	}
 
 	// Set optional fields
-	if req.Phone != nil {
-		lead.Phone = req.Phone
-	}
-	if req.Mobile != nil {
-		lead.Mobile = req.Mobile
-	}
-	if req.JobTitle != nil {
-		lead.JobTitle = req.JobTitle
-	}
-	if req.Department != nil {
-		lead.Department = req.Department
-	}
-	if req.Company != nil {
-		lead.Company = req.Company
-	}
-	if req.CompanySize != nil {
-		lead.CompanySize = req.CompanySize
-	}
-	if req.Industry != nil {
-		lead.Industry = req.Industry
-	}
-	if req.Website != nil {
-		lead.Website = req.Website
-	}
-	if req.AnnualRevenue != nil {
-		lead.AnnualRevenue = req.AnnualRevenue
-	}
-	if req.NumberEmployees != nil {
-		lead.NumberEmployees = req.NumberEmployees
-	}
-	if req.Address != nil {
-		lead.Address = mapAddressDTOToDomain(req.Address)
-	}
-	if req.SourceDetails != nil {
-		lead.SourceDetails = req.SourceDetails
-	}
-	if campaignID != nil {
-		lead.CampaignID = campaignID
-	}
-	if req.ReferralSource != nil {
-		lead.ReferralSource = req.ReferralSource
-	}
-
-	// Set UTM parameters
-	if req.UTMSource != nil {
-		lead.UTMSource = req.UTMSource
-	}
-	if req.UTMMedium != nil {
-		lead.UTMMedium = req.UTMMedium
-	}
-	if req.UTMCampaign != nil {
-		lead.UTMCampaign = req.UTMCampaign
-	}
-	if req.UTMTerm != nil {
-		lead.UTMTerm = req.UTMTerm
-	}
-	if req.UTMContent != nil {
-		lead.UTMContent = req.UTMContent
-	}
-
-	// Set owner
-	if ownerID != nil {
-		lead.OwnerID = ownerID
-	}
-
-	// Set additional fields
 	if req.Description != nil {
-		lead.Description = req.Description
+		lead.Description = *req.Description
 	}
 	if req.Tags != nil {
 		lead.Tags = req.Tags
@@ -222,48 +154,48 @@ func (uc *leadUseCase) Create(ctx context.Context, tenantID, userID uuid.UUID, r
 	if req.CustomFields != nil {
 		lead.CustomFields = req.CustomFields
 	}
-	if req.ProductInterest != nil {
-		lead.ProductInterest = req.ProductInterest
-	}
 	if req.Budget != nil && req.BudgetCurrency != nil {
-		budget, _ := domain.NewMoney(*req.Budget, *req.BudgetCurrency)
-		lead.Budget = budget
+		money, err := domain.NewMoney(*req.Budget, *req.BudgetCurrency)
+		if err != nil {
+			return nil, application.ErrValidation("invalid budget currency: " + err.Error())
+		}
+		lead.EstimatedValue = money
 	}
-	if req.Timeline != nil {
-		lead.Timeline = req.Timeline
+
+	// Handle owner assignment
+	if req.OwnerID != nil {
+		ownerID, err := uuid.Parse(*req.OwnerID)
+		if err == nil {
+			// Get owner name from user service
+			ownerName := ""
+			if uc.userService != nil {
+				user, err := uc.userService.GetUser(ctx, tenantID, ownerID)
+				if err == nil && user != nil {
+					ownerName = user.FullName
+				}
+			}
+			lead.AssignOwner(ownerID, ownerName)
+		}
 	}
-	if req.Requirements != nil {
-		lead.Requirements = req.Requirements
-	}
-	if req.MarketingConsent != nil {
-		lead.MarketingConsent = *req.MarketingConsent
-	}
-	if req.PrivacyConsent != nil {
-		lead.PrivacyConsent = *req.PrivacyConsent
+
+	// Generate code
+	if uc.idGenerator != nil {
+		code, err := uc.idGenerator.GenerateLeadNumber(ctx, tenantID)
+		if err == nil {
+			lead.Code = code
+		}
 	}
 
 	// Save lead
 	if err := uc.leadRepo.Create(ctx, lead); err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to save lead", err)
+		return nil, application.ErrInternal("failed to create lead", err)
 	}
 
-	// Publish domain events
-	for _, event := range lead.Events() {
-		if err := uc.publishEvent(ctx, event); err != nil {
-			// Log error but don't fail the operation
-		}
-	}
+	// Publish events
+	uc.publishDomainEvents(ctx, lead.GetEvents())
 	lead.ClearEvents()
 
-	// Index for search
-	if uc.searchService != nil {
-		go uc.indexLead(context.Background(), lead)
-	}
-
-	// Invalidate cache
-	uc.invalidateLeadCache(ctx, tenantID)
-
-	return uc.mapLeadToResponse(ctx, lead), nil
+	return uc.mapLeadToResponse(lead), nil
 }
 
 // GetByID retrieves a lead by ID.
@@ -273,7 +205,7 @@ func (uc *leadUseCase) GetByID(ctx context.Context, tenantID, leadID uuid.UUID) 
 		return nil, application.ErrLeadNotFound(leadID)
 	}
 
-	return uc.mapLeadToResponse(ctx, lead), nil
+	return uc.mapLeadToResponse(lead), nil
 }
 
 // Update updates a lead.
@@ -283,72 +215,71 @@ func (uc *leadUseCase) Update(ctx context.Context, tenantID, leadID, userID uuid
 		return nil, application.ErrLeadNotFound(leadID)
 	}
 
-	// Check version for optimistic locking
+	if lead.IsConverted() {
+		return nil, application.ErrConflict("lead is already converted")
+	}
+
+	// Check version
 	if lead.Version != req.Version {
 		return nil, application.ErrVersionMismatch(req.Version, lead.Version)
 	}
 
-	// Check if lead can be updated (not converted)
-	if lead.Status == domain.LeadStatusConverted {
-		return nil, application.ErrLeadAlreadyConverted(leadID)
-	}
-
-	// Update fields
+	// Update contact
+	contact := lead.Contact
 	if req.FirstName != nil {
-		lead.FirstName = *req.FirstName
+		contact.FirstName = *req.FirstName
 	}
 	if req.LastName != nil {
-		lead.LastName = *req.LastName
+		contact.LastName = *req.LastName
 	}
-	if req.Email != nil && *req.Email != lead.Email {
-		// Check for duplicate email
-		existingLead, err := uc.leadRepo.GetByEmail(ctx, tenantID, *req.Email)
-		if err == nil && existingLead != nil && existingLead.ID != leadID {
-			return nil, application.ErrLeadDuplicateEmail(*req.Email)
-		}
-		lead.Email = *req.Email
+	if req.Email != nil {
+		contact.Email = *req.Email
 	}
 	if req.Phone != nil {
-		lead.Phone = req.Phone
+		contact.Phone = *req.Phone
 	}
 	if req.Mobile != nil {
-		lead.Mobile = req.Mobile
+		contact.Mobile = *req.Mobile
 	}
 	if req.JobTitle != nil {
-		lead.JobTitle = req.JobTitle
+		contact.JobTitle = *req.JobTitle
 	}
 	if req.Department != nil {
-		lead.Department = req.Department
+		contact.Department = *req.Department
 	}
+
+	// Update company
+	company := lead.Company
 	if req.Company != nil {
-		lead.Company = req.Company
+		company.Name = *req.Company
 	}
 	if req.CompanySize != nil {
-		lead.CompanySize = req.CompanySize
+		company.Size = *req.CompanySize
 	}
 	if req.Industry != nil {
-		lead.Industry = req.Industry
+		company.Industry = *req.Industry
 	}
 	if req.Website != nil {
-		lead.Website = req.Website
-	}
-	if req.AnnualRevenue != nil {
-		lead.AnnualRevenue = req.AnnualRevenue
-	}
-	if req.NumberEmployees != nil {
-		lead.NumberEmployees = req.NumberEmployees
+		company.Website = *req.Website
 	}
 	if req.Address != nil {
-		lead.Address = mapAddressDTOToDomain(req.Address)
+		company.Address = req.Address.Street1
+		company.City = req.Address.City
+		if req.Address.State != nil {
+			company.State = *req.Address.State
+		}
+		company.Country = req.Address.Country
+		if req.Address.PostalCode != nil {
+			company.PostalCode = *req.Address.PostalCode
+		}
 	}
-	if req.SourceDetails != nil {
-		lead.SourceDetails = req.SourceDetails
-	}
-	if req.ReferralSource != nil {
-		lead.ReferralSource = req.ReferralSource
-	}
+
+	// Update lead
+	lead.Update(contact, company, lead.Source, lead.Rating)
+
+	// Update other fields
 	if req.Description != nil {
-		lead.Description = req.Description
+		lead.Description = *req.Description
 	}
 	if req.Tags != nil {
 		lead.Tags = req.Tags
@@ -356,56 +287,24 @@ func (uc *leadUseCase) Update(ctx context.Context, tenantID, leadID, userID uuid
 	if req.CustomFields != nil {
 		lead.CustomFields = req.CustomFields
 	}
-	if req.ProductInterest != nil {
-		lead.ProductInterest = req.ProductInterest
-	}
 	if req.Budget != nil && req.BudgetCurrency != nil {
-		budget, _ := domain.NewMoney(*req.Budget, *req.BudgetCurrency)
-		lead.Budget = budget
-	}
-	if req.Timeline != nil {
-		lead.Timeline = req.Timeline
-	}
-	if req.Requirements != nil {
-		lead.Requirements = req.Requirements
-	}
-	if req.MarketingConsent != nil {
-		lead.MarketingConsent = *req.MarketingConsent
-	}
-	if req.PrivacyConsent != nil {
-		lead.PrivacyConsent = *req.PrivacyConsent
+		money, err := domain.NewMoney(*req.Budget, *req.BudgetCurrency)
+		if err != nil {
+			return nil, application.ErrValidation("invalid budget currency: " + err.Error())
+		}
+		lead.SetEstimatedValue(money)
 	}
 
-	// Update metadata
-	lead.UpdatedAt = time.Now()
-	lead.UpdatedBy = userID
-	lead.Version++
-
-	// Add update event
-	lead.AddEvent(domain.NewLeadUpdatedEvent(lead, userID))
-
-	// Save changes
+	// Save
 	if err := uc.leadRepo.Update(ctx, lead); err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to update lead", err)
+		return nil, application.ErrInternal("failed to update lead", err)
 	}
 
 	// Publish events
-	for _, event := range lead.Events() {
-		if err := uc.publishEvent(ctx, event); err != nil {
-			// Log error but don't fail
-		}
-	}
+	uc.publishDomainEvents(ctx, lead.GetEvents())
 	lead.ClearEvents()
 
-	// Update search index
-	if uc.searchService != nil {
-		go uc.indexLead(context.Background(), lead)
-	}
-
-	// Invalidate cache
-	uc.invalidateLeadCache(ctx, tenantID)
-
-	return uc.mapLeadToResponse(ctx, lead), nil
+	return uc.mapLeadToResponse(lead), nil
 }
 
 // Delete deletes a lead.
@@ -415,72 +314,96 @@ func (uc *leadUseCase) Delete(ctx context.Context, tenantID, leadID, userID uuid
 		return application.ErrLeadNotFound(leadID)
 	}
 
-	// Check if lead can be deleted (not converted)
-	if lead.Status == domain.LeadStatusConverted {
-		return application.ErrLeadAlreadyConverted(leadID)
+	if err := lead.Delete(); err != nil {
+		return application.ErrConflict(err.Error())
 	}
 
-	// Delete lead
-	if err := uc.leadRepo.Delete(ctx, tenantID, leadID); err != nil {
-		return application.WrapError(application.ErrCodeInternal, "failed to delete lead", err)
+	if err := uc.leadRepo.Update(ctx, lead); err != nil {
+		return application.ErrInternal("failed to delete lead", err)
 	}
 
-	// Publish delete event
-	event := domain.NewLeadDeletedEvent(lead, userID)
-	uc.publishEvent(ctx, event)
-
-	// Remove from search index
-	if uc.searchService != nil {
-		go uc.searchService.DeleteIndex(context.Background(), tenantID, "lead", leadID)
-	}
-
-	// Invalidate cache
-	uc.invalidateLeadCache(ctx, tenantID)
+	// Publish events
+	uc.publishDomainEvents(ctx, lead.GetEvents())
 
 	return nil
 }
 
-// List lists leads with filtering.
+// List lists leads.
 func (uc *leadUseCase) List(ctx context.Context, tenantID uuid.UUID, filter *dto.LeadFilterRequest) (*dto.LeadListResponse, error) {
-	// Map filter to domain filter
-	domainFilter := uc.mapFilterToDomain(filter)
+	// Set defaults
+	page := filter.Page
+	pageSize := filter.PageSize
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
 
-	// Set pagination defaults
-	opts := domain.DefaultListOptions()
-	if filter.Page > 0 {
-		opts.Page = filter.Page
+	// Build domain filter
+	domainFilter := domain.LeadFilter{}
+	if filter.Statuses != nil {
+		for _, s := range filter.Statuses {
+			domainFilter.Statuses = append(domainFilter.Statuses, domain.LeadStatus(s))
+		}
 	}
-	if filter.PageSize > 0 {
-		opts.PageSize = filter.PageSize
+	if filter.Sources != nil {
+		for _, s := range filter.Sources {
+			domainFilter.Sources = append(domainFilter.Sources, domain.LeadSource(s))
+		}
 	}
-	if filter.SortBy != "" {
-		opts.SortBy = filter.SortBy
+	if filter.OwnerIDs != nil {
+		for _, id := range filter.OwnerIDs {
+			if ownerID, err := uuid.Parse(id); err == nil {
+				domainFilter.OwnerIDs = append(domainFilter.OwnerIDs, ownerID)
+			}
+		}
 	}
-	if filter.SortOrder != "" {
-		opts.SortOrder = filter.SortOrder
+	if filter.MinScore != nil {
+		domainFilter.MinScore = filter.MinScore
+	}
+	if filter.MaxScore != nil {
+		domainFilter.MaxScore = filter.MaxScore
+	}
+	if filter.SearchQuery != "" {
+		domainFilter.SearchQuery = filter.SearchQuery
+	}
+
+	// Build list options
+	opts := domain.ListOptions{
+		Page:     page,
+		PageSize: pageSize,
+		SortBy:   filter.SortBy,
+		SortOrder: filter.SortOrder,
+	}
+	if opts.SortBy == "" {
+		opts.SortBy = "created_at"
+	}
+	if opts.SortOrder == "" {
+		opts.SortOrder = "desc"
 	}
 
 	// Get leads
 	leads, total, err := uc.leadRepo.List(ctx, tenantID, domainFilter, opts)
 	if err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to list leads", err)
+		return nil, application.ErrInternal("failed to list leads", err)
 	}
 
 	// Map to response
-	leadResponses := make([]*dto.LeadBriefResponse, len(leads))
-	for i, lead := range leads {
-		leadResponses[i] = uc.mapLeadToBriefResponse(lead)
+	response := &dto.LeadListResponse{
+		Leads:      make([]*dto.LeadBriefResponse, 0, len(leads)),
+		Pagination: dto.NewPaginationResponse(page, pageSize, total),
 	}
 
-	return &dto.LeadListResponse{
-		Leads:      leadResponses,
-		Pagination: dto.NewPaginationResponse(opts.Page, opts.PageSize, total),
-	}, nil
-}
+	for _, lead := range leads {
+		response.Leads = append(response.Leads, uc.mapLeadToBriefResponse(lead))
+	}
 
-// ============================================================================
-// Status Operations
-// ============================================================================
+	return response, nil
+}
 
 // Qualify qualifies a lead.
 func (uc *leadUseCase) Qualify(ctx context.Context, tenantID, leadID, userID uuid.UUID, req *dto.QualifyLeadRequest) (*dto.LeadResponse, error) {
@@ -489,52 +412,25 @@ func (uc *leadUseCase) Qualify(ctx context.Context, tenantID, leadID, userID uui
 		return nil, application.ErrLeadNotFound(leadID)
 	}
 
-	// Qualify the lead
-	if err := lead.Qualify(userID); err != nil {
-		return nil, application.WrapError(application.ErrCodeLeadInvalidTransition, err.Error(), err)
+	if err := lead.Qualify(); err != nil {
+		return nil, application.ErrConflict(err.Error())
 	}
 
-	// Update qualification details
-	if req.Budget != nil && req.BudgetCurrency != nil {
-		budget, _ := domain.NewMoney(*req.Budget, *req.BudgetCurrency)
-		lead.Budget = budget
-	}
-	if req.Authority != nil {
-		lead.Authority = req.Authority
-	}
-	if req.Need != nil {
-		lead.Need = req.Need
-	}
-	if req.Timeline != nil {
-		lead.Timeline = req.Timeline
-	}
+	// Update notes if provided
 	if req.Notes != "" {
-		lead.QualificationNotes = &req.Notes
-	}
-	if req.QualificationCriteria != nil {
-		if lead.CustomFields == nil {
-			lead.CustomFields = make(map[string]interface{})
-		}
-		lead.CustomFields["qualification_criteria"] = req.QualificationCriteria
+		lead.Notes = req.Notes
 	}
 
-	// Save changes
+	// Save
 	if err := uc.leadRepo.Update(ctx, lead); err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to qualify lead", err)
+		return nil, application.ErrInternal("failed to qualify lead", err)
 	}
 
 	// Publish events
-	for _, event := range lead.Events() {
-		uc.publishEvent(ctx, event)
-	}
+	uc.publishDomainEvents(ctx, lead.GetEvents())
 	lead.ClearEvents()
 
-	// Update search index
-	if uc.searchService != nil {
-		go uc.indexLead(context.Background(), lead)
-	}
-
-	return uc.mapLeadToResponse(ctx, lead), nil
+	return uc.mapLeadToResponse(lead), nil
 }
 
 // Disqualify disqualifies a lead.
@@ -544,59 +440,135 @@ func (uc *leadUseCase) Disqualify(ctx context.Context, tenantID, leadID, userID 
 		return nil, application.ErrLeadNotFound(leadID)
 	}
 
-	// Disqualify the lead
-	if err := lead.Disqualify(req.Reason, userID); err != nil {
-		return nil, application.WrapError(application.ErrCodeLeadInvalidTransition, err.Error(), err)
+	if err := lead.Disqualify(req.Reason, req.Notes, userID); err != nil {
+		return nil, application.ErrConflict(err.Error())
 	}
 
-	// Set notes
-	if req.Notes != "" {
-		lead.DisqualifyNotes = &req.Notes
-	}
-
-	// Save changes
+	// Save
 	if err := uc.leadRepo.Update(ctx, lead); err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to disqualify lead", err)
+		return nil, application.ErrInternal("failed to disqualify lead", err)
 	}
 
 	// Publish events
-	for _, event := range lead.Events() {
-		uc.publishEvent(ctx, event)
-	}
+	uc.publishDomainEvents(ctx, lead.GetEvents())
 	lead.ClearEvents()
 
-	// Update search index
-	if uc.searchService != nil {
-		go uc.indexLead(context.Background(), lead)
-	}
-
-	return uc.mapLeadToResponse(ctx, lead), nil
+	return uc.mapLeadToResponse(lead), nil
 }
 
-// Contact marks a lead as contacted.
-func (uc *leadUseCase) Contact(ctx context.Context, tenantID, leadID, userID uuid.UUID) (*dto.LeadResponse, error) {
+// Convert converts a lead to an opportunity.
+func (uc *leadUseCase) Convert(ctx context.Context, tenantID, leadID, userID uuid.UUID, req *dto.ConvertLeadRequest) (*dto.LeadConversionResponse, error) {
+	// Get lead
 	lead, err := uc.leadRepo.GetByID(ctx, tenantID, leadID)
 	if err != nil {
 		return nil, application.ErrLeadNotFound(leadID)
 	}
 
-	// Mark as contacted
-	if err := lead.Contact(userID); err != nil {
-		return nil, application.WrapError(application.ErrCodeLeadInvalidTransition, err.Error(), err)
+	if !lead.CanConvert() {
+		return nil, application.ErrConflict("lead cannot be converted - must be qualified first")
 	}
 
-	// Save changes
+	// Get pipeline
+	pipelineID, err := uuid.Parse(req.PipelineID)
+	if err != nil {
+		return nil, application.ErrValidation("invalid pipeline ID")
+	}
+
+	pipeline, err := uc.pipelineRepo.GetByID(ctx, tenantID, pipelineID)
+	if err != nil {
+		return nil, application.ErrPipelineNotFound(pipelineID)
+	}
+
+	// Determine customer
+	var customerID uuid.UUID
+	customerName := lead.Company.Name
+	if req.CustomerID != nil {
+		customerID, err = uuid.Parse(*req.CustomerID)
+		if err != nil {
+			return nil, application.ErrValidation("invalid customer ID")
+		}
+		if req.CustomerName != nil {
+			customerName = *req.CustomerName
+		}
+	} else if req.CreateNewCustomer && uc.customerService != nil {
+		// Create new customer - use pointer types for optional fields
+		email := lead.Contact.Email
+		phone := lead.Contact.Phone
+		website := lead.Company.Website
+
+		createReq := ports.CreateCustomerRequest{
+			Name:   lead.Company.Name,
+			Type:   "business",
+			Source: "lead_conversion",
+		}
+		if email != "" {
+			createReq.Email = &email
+		}
+		if phone != "" {
+			createReq.Phone = &phone
+		}
+		if website != "" {
+			createReq.Website = &website
+		}
+
+		newCustomer, err := uc.customerService.CreateCustomer(ctx, tenantID, createReq)
+		if err != nil {
+			return nil, application.ErrInternal("failed to create customer", err)
+		}
+		customerID = newCustomer.ID
+		customerName = newCustomer.Name
+	}
+
+	// Get owner
+	ownerID := userID
+	ownerName := ""
+	if req.OwnerID != nil {
+		ownerID, _ = uuid.Parse(*req.OwnerID)
+	} else if lead.OwnerID != nil {
+		ownerID = *lead.OwnerID
+		ownerName = lead.OwnerName
+	}
+
+	// Create opportunity from lead
+	opportunity, err := domain.NewOpportunityFromLead(lead, pipeline, customerID, customerName, userID)
+	if err != nil {
+		return nil, application.ErrInternal("failed to create opportunity from lead", err)
+	}
+
+	// Set owner
+	opportunity.AssignOwner(ownerID, ownerName)
+
+	// Set description if provided
+	if req.Description != nil {
+		opportunity.Description = *req.Description
+	}
+
+	// Save opportunity
+	if err := uc.opportunityRepo.Create(ctx, opportunity); err != nil {
+		return nil, application.ErrInternal("failed to create opportunity", err)
+	}
+
+	// Mark lead as converted
+	var contactID *uuid.UUID
+	if err := lead.ConvertToOpportunity(opportunity.ID, userID, &customerID, contactID); err != nil {
+		return nil, application.ErrInternal("failed to convert lead", err)
+	}
+
+	// Save lead
 	if err := uc.leadRepo.Update(ctx, lead); err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to update lead", err)
+		return nil, application.ErrInternal("failed to update lead", err)
 	}
 
 	// Publish events
-	for _, event := range lead.Events() {
-		uc.publishEvent(ctx, event)
-	}
-	lead.ClearEvents()
+	uc.publishDomainEvents(ctx, lead.GetEvents())
+	uc.publishDomainEvents(ctx, opportunity.GetEvents())
 
-	return uc.mapLeadToResponse(ctx, lead), nil
+	return &dto.LeadConversionResponse{
+		LeadID:        lead.ID.String(),
+		OpportunityID: opportunity.ID.String(),
+		CustomerID:    dto.StringPtr(customerID.String()),
+		Message:       "Lead converted successfully",
+	}, nil
 }
 
 // Nurture moves a lead to nurturing status.
@@ -606,41 +578,33 @@ func (uc *leadUseCase) Nurture(ctx context.Context, tenantID, leadID, userID uui
 		return nil, application.ErrLeadNotFound(leadID)
 	}
 
-	// Move to nurturing
-	if err := lead.Nurture(userID); err != nil {
-		return nil, application.WrapError(application.ErrCodeLeadInvalidTransition, err.Error(), err)
+	if err := lead.StartNurturing(); err != nil {
+		return nil, application.ErrConflict(err.Error())
 	}
 
-	// Set nurturing details
+	// Set campaign if provided
 	if req.NurtureCampaignID != nil {
-		campaignID, _ := uuid.Parse(*req.NurtureCampaignID)
-		lead.NurtureCampaignID = &campaignID
+		campaignID, err := uuid.Parse(*req.NurtureCampaignID)
+		if err == nil {
+			lead.CampaignID = &campaignID
+		}
 	}
-	if req.Reason != "" {
-		lead.NurtureReason = &req.Reason
-	}
+
+	// Set reengage date if provided
 	if req.ReengageDate != nil {
-		reengageDate, _ := time.Parse("2006-01-02", *req.ReengageDate)
-		lead.ReengageDate = &reengageDate
+		t, err := time.Parse("2006-01-02", *req.ReengageDate)
+		if err == nil {
+			lead.SetNextFollowUp(t)
+		}
 	}
 
-	// Save changes
+	// Save
 	if err := uc.leadRepo.Update(ctx, lead); err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to update lead", err)
+		return nil, application.ErrInternal("failed to nurture lead", err)
 	}
 
-	// Publish events
-	for _, event := range lead.Events() {
-		uc.publishEvent(ctx, event)
-	}
-	lead.ClearEvents()
-
-	return uc.mapLeadToResponse(ctx, lead), nil
+	return uc.mapLeadToResponse(lead), nil
 }
-
-// ============================================================================
-// Assignment
-// ============================================================================
 
 // Assign assigns a lead to an owner.
 func (uc *leadUseCase) Assign(ctx context.Context, tenantID, leadID, userID uuid.UUID, req *dto.AssignLeadRequest) (*dto.LeadResponse, error) {
@@ -649,845 +613,287 @@ func (uc *leadUseCase) Assign(ctx context.Context, tenantID, leadID, userID uuid
 		return nil, application.ErrLeadNotFound(leadID)
 	}
 
-	// Parse owner ID
 	ownerID, err := uuid.Parse(req.OwnerID)
 	if err != nil {
-		return nil, application.ErrValidation("invalid owner_id format")
+		return nil, application.ErrValidation("invalid owner ID")
 	}
 
-	// Verify owner exists
-	exists, err := uc.userService.UserExists(ctx, tenantID, ownerID)
-	if err != nil {
-		return nil, application.WrapError(application.ErrCodeUserServiceError, "failed to verify owner", err)
-	}
-	if !exists {
-		return nil, application.ErrUserNotFound(ownerID)
-	}
-
-	// Assign lead
-	previousOwner := lead.OwnerID
-	if err := lead.Assign(ownerID, userID); err != nil {
-		return nil, application.WrapError(application.ErrCodeLeadAssignmentFailed, err.Error(), err)
-	}
-
-	// Add assignment notes
-	if req.Notes != "" {
-		if lead.CustomFields == nil {
-			lead.CustomFields = make(map[string]interface{})
+	// Get owner name
+	ownerName := ""
+	if uc.userService != nil {
+		user, err := uc.userService.GetUser(ctx, tenantID, ownerID)
+		if err == nil && user != nil {
+			ownerName = user.FullName
 		}
-		lead.CustomFields["assignment_notes"] = req.Notes
 	}
 
-	// Save changes
+	lead.AssignOwner(ownerID, ownerName)
+
+	// Save
 	if err := uc.leadRepo.Update(ctx, lead); err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to assign lead", err)
+		return nil, application.ErrInternal("failed to assign lead", err)
 	}
 
 	// Publish events
-	for _, event := range lead.Events() {
-		uc.publishEvent(ctx, event)
-	}
+	uc.publishDomainEvents(ctx, lead.GetEvents())
 	lead.ClearEvents()
 
-	// Notify new owner (if different from previous)
-	if previousOwner == nil || *previousOwner != ownerID {
-		// Send notification asynchronously
-	}
-
-	return uc.mapLeadToResponse(ctx, lead), nil
+	return uc.mapLeadToResponse(lead), nil
 }
 
-// BulkAssign bulk assigns leads to an owner.
-func (uc *leadUseCase) BulkAssign(ctx context.Context, tenantID, userID uuid.UUID, req *dto.BulkAssignLeadsRequest) error {
-	// Parse owner ID
+// BulkAssign bulk assigns leads.
+func (uc *leadUseCase) BulkAssign(ctx context.Context, tenantID, userID uuid.UUID, req *dto.BulkAssignLeadsRequest) (int, error) {
 	ownerID, err := uuid.Parse(req.OwnerID)
 	if err != nil {
-		return application.ErrValidation("invalid owner_id format")
+		return 0, application.ErrValidation("invalid owner ID")
 	}
 
-	// Verify owner exists
-	exists, err := uc.userService.UserExists(ctx, tenantID, ownerID)
-	if err != nil {
-		return application.WrapError(application.ErrCodeUserServiceError, "failed to verify owner", err)
-	}
-	if !exists {
-		return application.ErrUserNotFound(ownerID)
-	}
-
-	// Parse lead IDs
-	leadIDs := make([]uuid.UUID, len(req.LeadIDs))
-	for i, id := range req.LeadIDs {
-		parsedID, err := uuid.Parse(id)
-		if err != nil {
-			return application.ErrValidation("invalid lead_id format")
+	// Get owner name
+	ownerName := ""
+	if uc.userService != nil {
+		user, err := uc.userService.GetUser(ctx, tenantID, ownerID)
+		if err == nil && user != nil {
+			ownerName = user.FullName
 		}
-		leadIDs[i] = parsedID
 	}
 
-	// Bulk update
-	if err := uc.leadRepo.BulkUpdateOwner(ctx, tenantID, leadIDs, ownerID); err != nil {
-		return application.WrapError(application.ErrCodeInternal, "failed to bulk assign leads", err)
+	updated := 0
+	for _, leadIDStr := range req.LeadIDs {
+		leadID, err := uuid.Parse(leadIDStr)
+		if err != nil {
+			continue
+		}
+
+		lead, err := uc.leadRepo.GetByID(ctx, tenantID, leadID)
+		if err != nil {
+			continue
+		}
+
+		lead.AssignOwner(ownerID, ownerName)
+
+		if err := uc.leadRepo.Update(ctx, lead); err != nil {
+			continue
+		}
+
+		updated++
 	}
 
-	// Invalidate cache
-	uc.invalidateLeadCache(ctx, tenantID)
-
-	return nil
+	return updated, nil
 }
 
-// ============================================================================
-// Scoring
-// ============================================================================
-
-// UpdateScore updates a lead's score.
+// UpdateScore updates lead scoring.
 func (uc *leadUseCase) UpdateScore(ctx context.Context, tenantID, leadID, userID uuid.UUID, req *dto.ScoreLeadRequest) (*dto.LeadResponse, error) {
 	lead, err := uc.leadRepo.GetByID(ctx, tenantID, leadID)
 	if err != nil {
 		return nil, application.ErrLeadNotFound(leadID)
 	}
 
-	// Update scores
+	demographic := lead.Score.Demographic
+	behavioral := lead.Score.Behavioral
+	reason := req.Reason
+
 	if req.DemographicScore != nil {
-		lead.DemographicScore = *req.DemographicScore
+		demographic = *req.DemographicScore
 	}
 	if req.BehavioralScore != nil {
-		lead.BehavioralScore = *req.BehavioralScore
+		behavioral = *req.BehavioralScore
+	}
+	if reason == "" {
+		reason = "Manual score update"
 	}
 
-	// Recalculate total score
-	lead.CalculateScore()
+	lead.UpdateScore(demographic, behavioral, reason)
 
-	// Process activity if provided
-	if req.Activity != nil {
-		lead.BehavioralScore += req.Activity.Score
-		lead.CalculateScore()
-		lead.LastActivityAt = timePtr(time.Now())
-		lead.ActivityCount++
-	}
-
-	// Update metadata
-	lead.UpdatedAt = time.Now()
-	lead.UpdatedBy = userID
-	lead.Version++
-
-	// Add score updated event
-	lead.AddEvent(domain.NewLeadScoreUpdatedEvent(lead, lead.Score, userID))
-
-	// Save changes
+	// Save
 	if err := uc.leadRepo.Update(ctx, lead); err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to update lead score", err)
+		return nil, application.ErrInternal("failed to update lead score", err)
 	}
 
 	// Publish events
-	for _, event := range lead.Events() {
-		uc.publishEvent(ctx, event)
-	}
+	uc.publishDomainEvents(ctx, lead.GetEvents())
 	lead.ClearEvents()
 
-	return uc.mapLeadToResponse(ctx, lead), nil
+	return uc.mapLeadToResponse(lead), nil
 }
 
-// ============================================================================
-// Conversion
-// ============================================================================
-
-// ConvertToOpportunity converts a lead to an opportunity.
-func (uc *leadUseCase) ConvertToOpportunity(ctx context.Context, tenantID, leadID, userID uuid.UUID, req *dto.ConvertLeadRequest) (*dto.LeadConversionResponse, error) {
-	// Get the lead
-	lead, err := uc.leadRepo.GetByID(ctx, tenantID, leadID)
-	if err != nil {
-		return nil, application.ErrLeadNotFound(leadID)
-	}
-
-	// Check if lead can be converted
-	if lead.Status == domain.LeadStatusConverted {
-		return nil, application.ErrLeadAlreadyConverted(leadID)
-	}
-	if lead.Status != domain.LeadStatusQualified {
-		return nil, application.ErrLeadNotQualified(leadID)
-	}
-
-	// Parse pipeline ID
-	pipelineID, err := uuid.Parse(req.PipelineID)
-	if err != nil {
-		return nil, application.ErrValidation("invalid pipeline_id format")
-	}
-
-	// Get pipeline
-	pipeline, err := uc.pipelineRepo.GetByID(ctx, tenantID, pipelineID)
-	if err != nil {
-		return nil, application.ErrPipelineNotFound(pipelineID)
-	}
-	if !pipeline.IsActive {
-		return nil, application.ErrPipelineInactive(pipelineID)
-	}
-
-	// Determine starting stage
-	var stage *domain.Stage
-	if req.StageID != nil {
-		stageID, _ := uuid.Parse(*req.StageID)
-		stage = pipeline.GetStageByID(stageID)
-		if stage == nil {
-			return nil, application.ErrPipelineStageNotFound(pipelineID, stageID)
-		}
-	} else {
-		// Get first open stage
-		stage = pipeline.GetFirstOpenStage()
-		if stage == nil {
-			return nil, application.NewAppError(application.ErrCodePipelineStageNotFound, "pipeline has no open stages")
-		}
-	}
-
-	// Handle customer
-	var customerID *uuid.UUID
-	if req.CustomerID != nil {
-		parsedCustomerID, _ := uuid.Parse(*req.CustomerID)
-		// Verify customer exists
-		exists, err := uc.customerService.CustomerExists(ctx, tenantID, parsedCustomerID)
-		if err != nil {
-			return nil, application.WrapError(application.ErrCodeCustomerServiceError, "failed to verify customer", err)
-		}
-		if !exists {
-			return nil, application.ErrCustomerNotFound(parsedCustomerID)
-		}
-		customerID = &parsedCustomerID
-	} else if req.CreateNewCustomer && req.CustomerName != nil {
-		// Create new customer
-		customerReq := ports.CreateCustomerRequest{
-			Name:    *req.CustomerName,
-			Type:    "company",
-			Email:   &lead.Email,
-			Phone:   lead.Phone,
-			Website: lead.Website,
-			Source:  string(lead.Source),
-		}
-		if lead.Address != nil {
-			customerReq.Address = &ports.AddressInfo{
-				Street1: lead.Address.Street1,
-				City:    lead.Address.City,
-				Country: lead.Address.Country,
-			}
-		}
-
-		customer, err := uc.customerService.CreateCustomer(ctx, tenantID, customerReq)
-		if err != nil {
-			return nil, application.WrapError(application.ErrCodeCustomerServiceError, "failed to create customer", err)
-		}
-		customerID = &customer.ID
-	}
-
-	// Handle contact
-	var contactID *uuid.UUID
-	if req.ContactID != nil {
-		parsedContactID, _ := uuid.Parse(*req.ContactID)
-		exists, err := uc.customerService.ContactExists(ctx, tenantID, parsedContactID)
-		if err != nil {
-			return nil, application.WrapError(application.ErrCodeCustomerServiceError, "failed to verify contact", err)
-		}
-		if !exists {
-			return nil, application.ErrContactNotFound(parsedContactID)
-		}
-		contactID = &parsedContactID
-	} else if req.CreateNewContact && customerID != nil {
-		// Create new contact from lead data
-		contactReq := ports.CreateContactRequest{
-			FirstName:  lead.FirstName,
-			LastName:   lead.LastName,
-			Email:      lead.Email,
-			Phone:      lead.Phone,
-			Mobile:     lead.Mobile,
-			JobTitle:   lead.JobTitle,
-			Department: lead.Department,
-			IsPrimary:  true,
-		}
-
-		contact, err := uc.customerService.CreateContact(ctx, tenantID, *customerID, contactReq)
-		if err != nil {
-			return nil, application.WrapError(application.ErrCodeCustomerServiceError, "failed to create contact", err)
-		}
-		contactID = &contact.ID
-	}
-
-	// Create opportunity ID
-	opportunityID := uc.idGenerator.GenerateID()
-
-	// Convert lead
-	if err := lead.ConvertToOpportunity(opportunityID, userID, customerID, contactID); err != nil {
-		return nil, application.WrapError(application.ErrCodeLeadConversionFailed, err.Error(), err)
-	}
-
-	// Create opportunity
-	var amount int64 = 0
-	currency := pipeline.DefaultCurrency
-	if req.ExpectedAmount != nil {
-		amount = *req.ExpectedAmount
-	} else if lead.Budget != nil {
-		amount = lead.Budget.Amount
-		currency = lead.Budget.Currency
-	}
-	if req.Currency != nil {
-		currency = *req.Currency
-	}
-
-	opportunityAmount, _ := domain.NewMoney(amount, currency)
-
-	expectedCloseDate := time.Now().AddDate(0, 3, 0) // Default 3 months
-	if req.ExpectedCloseDate != nil {
-		expectedCloseDate, _ = time.Parse("2006-01-02", *req.ExpectedCloseDate)
-	}
-
-	probability := stage.Probability
-	if req.Probability != nil {
-		probability = *req.Probability
-	}
-
-	// Determine owner
-	ownerID := userID
-	if req.OwnerID != nil {
-		ownerID, _ = uuid.Parse(*req.OwnerID)
-	} else if lead.OwnerID != nil {
-		ownerID = *lead.OwnerID
-	}
-
-	opportunity, err := domain.NewOpportunity(
-		opportunityID,
-		tenantID,
-		req.OpportunityName,
-		pipelineID,
-		stage.ID,
-		opportunityAmount,
-		expectedCloseDate,
-		ownerID,
-		userID,
-	)
-	if err != nil {
-		return nil, application.WrapError(application.ErrCodeLeadConversionFailed, "failed to create opportunity", err)
-	}
-
-	// Set additional fields
-	opportunity.LeadID = &leadID
-	opportunity.CustomerID = customerID
-	opportunity.PrimaryContactID = contactID
-	opportunity.Probability = probability
-	if req.Description != nil {
-		opportunity.Description = req.Description
-	} else if lead.Description != nil {
-		opportunity.Description = lead.Description
-	}
-	if req.Source != nil {
-		opportunity.Source = *req.Source
-	} else {
-		opportunity.Source = string(lead.Source)
-	}
-
-	// Save opportunity
-	if err := uc.opportunityRepo.Create(ctx, opportunity); err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to save opportunity", err)
-	}
-
-	// Update lead
-	if err := uc.leadRepo.Update(ctx, lead); err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to update lead", err)
-	}
-
-	// Publish events
-	for _, event := range lead.Events() {
-		uc.publishEvent(ctx, event)
-	}
-	lead.ClearEvents()
-
-	for _, event := range opportunity.Events() {
-		uc.publishEvent(ctx, event)
-	}
-	opportunity.ClearEvents()
-
-	// Invalidate caches
-	uc.invalidateLeadCache(ctx, tenantID)
-
-	var customerIDStr, contactIDStr *string
-	if customerID != nil {
-		s := customerID.String()
-		customerIDStr = &s
-	}
-	if contactID != nil {
-		s := contactID.String()
-		contactIDStr = &s
-	}
-
-	return &dto.LeadConversionResponse{
-		LeadID:        leadID.String(),
-		OpportunityID: opportunityID.String(),
-		CustomerID:    customerIDStr,
-		ContactID:     contactIDStr,
-		Message:       "Lead successfully converted to opportunity",
-	}, nil
-}
-
-// ============================================================================
-// Bulk Operations
-// ============================================================================
-
-// BulkUpdateStatus bulk updates lead statuses.
-func (uc *leadUseCase) BulkUpdateStatus(ctx context.Context, tenantID, userID uuid.UUID, req *dto.BulkUpdateLeadStatusRequest) error {
-	// Parse lead IDs
-	leadIDs := make([]uuid.UUID, len(req.LeadIDs))
-	for i, id := range req.LeadIDs {
-		parsedID, err := uuid.Parse(id)
-		if err != nil {
-			return application.ErrValidation("invalid lead_id format")
-		}
-		leadIDs[i] = parsedID
-	}
-
-	// Map status
-	status := mapLeadStatus(req.Status)
-
-	// Bulk update
-	if err := uc.leadRepo.BulkUpdateStatus(ctx, tenantID, leadIDs, status); err != nil {
-		return application.WrapError(application.ErrCodeInternal, "failed to bulk update lead status", err)
-	}
-
-	// Invalidate cache
-	uc.invalidateLeadCache(ctx, tenantID)
-
-	return nil
-}
-
-// ============================================================================
-// Statistics
-// ============================================================================
-
-// GetStatistics retrieves lead statistics.
+// GetStatistics returns lead statistics.
 func (uc *leadUseCase) GetStatistics(ctx context.Context, tenantID uuid.UUID) (*dto.LeadStatisticsResponse, error) {
 	// Get counts by status
-	byStatus, err := uc.leadRepo.CountByStatus(ctx, tenantID)
+	statusCounts, err := uc.leadRepo.CountByStatus(ctx, tenantID)
 	if err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to get status counts", err)
+		return nil, application.ErrInternal("failed to get lead statistics", err)
 	}
 
 	// Get counts by source
-	bySource, err := uc.leadRepo.CountBySource(ctx, tenantID)
+	sourceCounts, err := uc.leadRepo.CountBySource(ctx, tenantID)
 	if err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to get source counts", err)
+		return nil, application.ErrInternal("failed to get lead statistics", err)
 	}
 
-	// Get conversion rate
-	now := time.Now()
-	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	conversionRate, err := uc.leadRepo.GetConversionRate(ctx, tenantID, startOfMonth, now)
+	// Get conversion rate for last 30 days
+	end := time.Now()
+	start := end.AddDate(0, 0, -30)
+	conversionRate, err := uc.leadRepo.GetConversionRate(ctx, tenantID, start, end)
 	if err != nil {
-		conversionRate = 0
+		conversionRate = 0 // Default to 0 if error
 	}
 
 	// Calculate totals
-	var total int64
-	for _, count := range byStatus {
-		total += count
+	var totalLeads int64
+	byStatus := make(map[string]int64)
+	for status, count := range statusCounts {
+		totalLeads += count
+		byStatus[string(status)] = count
 	}
 
-	// Get new leads counts
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	startOfWeek := today.AddDate(0, 0, -int(today.Weekday()))
-
-	newToday, _, _ := uc.leadRepo.GetCreatedBetween(ctx, tenantID, today, now, domain.ListOptions{PageSize: 1})
-	newWeek, _, _ := uc.leadRepo.GetCreatedBetween(ctx, tenantID, startOfWeek, now, domain.ListOptions{PageSize: 1})
-	newMonth, _, _ := uc.leadRepo.GetCreatedBetween(ctx, tenantID, startOfMonth, now, domain.ListOptions{PageSize: 1})
-
-	// Map status to string
-	statusMap := make(map[string]int64)
-	for status, count := range byStatus {
-		statusMap[string(status)] = count
-	}
-
-	// Map source to string
-	sourceMap := make(map[string]int64)
-	for source, count := range bySource {
-		sourceMap[string(source)] = count
-	}
-
-	// Calculate by rating (based on score thresholds)
-	byRating := map[string]int64{
-		"hot":  0,
-		"warm": 0,
-		"cold": 0,
+	bySource := make(map[string]int64)
+	for source, count := range sourceCounts {
+		bySource[string(source)] = count
 	}
 
 	return &dto.LeadStatisticsResponse{
-		TotalLeads:     total,
-		ByStatus:       statusMap,
-		BySource:       sourceMap,
-		ByRating:       byRating,
+		TotalLeads:     totalLeads,
+		ByStatus:       byStatus,
+		BySource:       bySource,
+		ByRating:       make(map[string]int64), // Would need additional repo method
 		ConversionRate: conversionRate,
-		AverageScore:   0, // Calculate from actual data
-		NewLeadsToday:  int64(len(newToday)),
-		NewLeadsWeek:   int64(len(newWeek)),
-		NewLeadsMonth:  int64(len(newMonth)),
+		AverageScore:   0, // Would need additional repo method
+		NewLeadsToday:  0, // Would need additional repo method
+		NewLeadsWeek:   0, // Would need additional repo method
+		NewLeadsMonth:  0, // Would need additional repo method
 	}, nil
 }
 
 // ============================================================================
-// Helper Methods
+// Helper Functions
 // ============================================================================
 
-func (uc *leadUseCase) mapLeadToResponse(ctx context.Context, lead *domain.Lead) *dto.LeadResponse {
+// publishDomainEvents converts domain events to ports.Event and publishes them.
+func (uc *leadUseCase) publishDomainEvents(ctx context.Context, events []domain.DomainEvent) {
+	if uc.eventPublisher == nil {
+		return
+	}
+
+	for _, domainEvent := range events {
+		event := ports.Event{
+			ID:            domainEvent.EventID().String(),
+			Type:          domainEvent.EventType(),
+			AggregateID:   domainEvent.AggregateID().String(),
+			AggregateType: domainEvent.AggregateType(),
+			TenantID:      domainEvent.TenantID().String(),
+			Payload:       make(map[string]interface{}),
+			Metadata:      make(map[string]string),
+			OccurredAt:    domainEvent.OccurredAt(),
+			Version:       domainEvent.Version(),
+		}
+		_ = uc.eventPublisher.Publish(ctx, event)
+	}
+}
+
+// ============================================================================
+// Mapping Functions
+// ============================================================================
+
+func (uc *leadUseCase) mapLeadToResponse(lead *domain.Lead) *dto.LeadResponse {
 	resp := &dto.LeadResponse{
 		ID:               lead.ID.String(),
 		TenantID:         lead.TenantID.String(),
-		FirstName:        lead.FirstName,
-		LastName:         lead.LastName,
-		FullName:         lead.FirstName + " " + lead.LastName,
-		Email:            lead.Email,
-		Phone:            lead.Phone,
-		Mobile:           lead.Mobile,
-		JobTitle:         lead.JobTitle,
-		Department:       lead.Department,
-		Company:          lead.Company,
-		CompanySize:      lead.CompanySize,
-		Industry:         lead.Industry,
-		Website:          lead.Website,
-		AnnualRevenue:    lead.AnnualRevenue,
-		NumberEmployees:  lead.NumberEmployees,
+		FirstName:        lead.Contact.FirstName,
+		LastName:         lead.Contact.LastName,
+		FullName:         lead.Contact.FullName(),
+		Email:            lead.Contact.Email,
+		Phone:            dto.StringPtr(lead.Contact.Phone),
+		Mobile:           dto.StringPtr(lead.Contact.Mobile),
+		JobTitle:         dto.StringPtr(lead.Contact.JobTitle),
+		Department:       dto.StringPtr(lead.Contact.Department),
+		Company:          dto.StringPtr(lead.Company.Name),
+		CompanySize:      dto.StringPtr(lead.Company.Size),
+		Industry:         dto.StringPtr(lead.Company.Industry),
+		Website:          dto.StringPtr(lead.Company.Website),
 		Status:           string(lead.Status),
-		Score:            lead.Score,
-		DemographicScore: lead.DemographicScore,
-		BehavioralScore:  lead.BehavioralScore,
-		Rating:           lead.GetRating(),
+		Score:            lead.Score.Score,
+		DemographicScore: lead.Score.Demographic,
+		BehavioralScore:  lead.Score.Behavioral,
+		Rating:           string(lead.Rating),
 		Source:           string(lead.Source),
-		SourceDetails:    lead.SourceDetails,
-		ReferralSource:   lead.ReferralSource,
-		Description:      lead.Description,
+		Description:      dto.StringPtr(lead.Description),
 		Tags:             lead.Tags,
 		CustomFields:     lead.CustomFields,
-		ProductInterest:  lead.ProductInterest,
-		Timeline:         lead.Timeline,
-		Requirements:     lead.Requirements,
-		MarketingConsent: lead.MarketingConsent,
-		PrivacyConsent:   lead.PrivacyConsent,
-		ActivityCount:    lead.ActivityCount,
 		CreatedAt:        lead.CreatedAt,
 		UpdatedAt:        lead.UpdatedAt,
 		CreatedBy:        lead.CreatedBy.String(),
-		UpdatedBy:        lead.UpdatedBy.String(),
+		UpdatedBy:        lead.CreatedBy.String(),
 		Version:          lead.Version,
 	}
 
-	// Map address
-	if lead.Address != nil {
-		resp.Address = mapAddressDomainToDTO(lead.Address)
-	}
-
-	// Map budget
-	if lead.Budget != nil {
-		resp.Budget = &dto.MoneyDTO{
-			Amount:   lead.Budget.Amount,
-			Currency: lead.Budget.Currency,
-			Display:  lead.Budget.Format(),
-		}
-	}
-
-	// Map campaign ID
-	if lead.CampaignID != nil {
-		s := lead.CampaignID.String()
-		resp.CampaignID = &s
-	}
-
-	// Map UTM params
-	if lead.UTMSource != nil || lead.UTMMedium != nil || lead.UTMCampaign != nil {
-		resp.UTMParams = &dto.UTMParamsDTO{
-			Source:   lead.UTMSource,
-			Medium:   lead.UTMMedium,
-			Campaign: lead.UTMCampaign,
-			Term:     lead.UTMTerm,
-			Content:  lead.UTMContent,
-		}
-	}
-
-	// Map owner
 	if lead.OwnerID != nil {
-		s := lead.OwnerID.String()
-		resp.OwnerID = &s
-		// Fetch owner details if needed
-		if uc.userService != nil {
-			if owner, err := uc.userService.GetUser(ctx, lead.TenantID, *lead.OwnerID); err == nil {
-				resp.Owner = &dto.UserBriefDTO{
-					ID:        owner.ID.String(),
-					Name:      owner.FullName,
-					Email:     owner.Email,
-					AvatarURL: owner.AvatarURL,
-				}
-			}
+		resp.OwnerID = dto.StringPtr(lead.OwnerID.String())
+	}
+
+	if lead.EstimatedValue.Amount > 0 {
+		resp.Budget = &dto.MoneyDTO{
+			Amount:   lead.EstimatedValue.Amount,
+			Currency: lead.EstimatedValue.Currency,
+			Display:  fmt.Sprintf("%s %d", lead.EstimatedValue.Currency, lead.EstimatedValue.Amount/100),
 		}
 	}
 
-	// Map qualification details
-	if lead.QualifiedAt != nil {
-		resp.QualifiedAt = lead.QualifiedAt
-	}
-	if lead.QualifiedBy != nil {
-		s := lead.QualifiedBy.String()
-		resp.QualifiedBy = &s
-	}
-	resp.QualificationNotes = lead.QualificationNotes
-
-	// Map disqualification details
-	if lead.DisqualifiedAt != nil {
-		resp.DisqualifiedAt = lead.DisqualifiedAt
-	}
-	if lead.DisqualifiedBy != nil {
-		s := lead.DisqualifiedBy.String()
-		resp.DisqualifiedBy = &s
-	}
-	resp.DisqualifyReason = lead.DisqualifyReason
-
-	// Map conversion details
-	if lead.ConvertedAt != nil {
-		resp.ConvertedAt = lead.ConvertedAt
-	}
-	if lead.ConvertedBy != nil {
-		s := lead.ConvertedBy.String()
-		resp.ConvertedBy = &s
-	}
-	if lead.OpportunityID != nil {
-		s := lead.OpportunityID.String()
-		resp.OpportunityID = &s
-	}
-	if lead.CustomerID != nil {
-		s := lead.CustomerID.String()
-		resp.CustomerID = &s
-	}
-	if lead.ContactID != nil {
-		s := lead.ContactID.String()
-		resp.ContactID = &s
+	if lead.Company.Address != "" {
+		resp.Address = &dto.AddressDTO{
+			Street1: lead.Company.Address,
+			City:    lead.Company.City,
+			State:   dto.StringPtr(lead.Company.State),
+			Country: lead.Company.Country,
+		}
 	}
 
-	// Map nurturing details
-	if lead.NurturingAt != nil {
-		resp.NurturingAt = lead.NurturingAt
-	}
-	if lead.NurtureCampaignID != nil {
-		s := lead.NurtureCampaignID.String()
-		resp.NurtureCampaignID = &s
+	// Conversion info
+	if lead.ConversionInfo != nil {
+		resp.ConvertedAt = &lead.ConversionInfo.ConvertedAt
+		resp.ConvertedBy = dto.StringPtr(lead.ConversionInfo.ConvertedBy.String())
+		resp.OpportunityID = dto.StringPtr(lead.ConversionInfo.OpportunityID.String())
+		if lead.ConversionInfo.CustomerID != nil {
+			resp.CustomerID = dto.StringPtr(lead.ConversionInfo.CustomerID.String())
+		}
+		if lead.ConversionInfo.ContactID != nil {
+			resp.ContactID = dto.StringPtr(lead.ConversionInfo.ContactID.String())
+		}
 	}
 
-	// Map activity
-	resp.LastActivityAt = lead.LastActivityAt
+	// Disqualify info
+	if lead.DisqualifyInfo != nil {
+		resp.DisqualifiedAt = &lead.DisqualifyInfo.DisqualifiedAt
+		resp.DisqualifiedBy = dto.StringPtr(lead.DisqualifyInfo.DisqualifiedBy.String())
+		resp.DisqualifyReason = dto.StringPtr(lead.DisqualifyInfo.Reason)
+	}
+
+	// Activity info
 	resp.LastContactedAt = lead.LastContactedAt
+	if lead.Engagement.LastEngagement != nil {
+		resp.LastActivityAt = lead.Engagement.LastEngagement
+	}
+	resp.ActivityCount = lead.Engagement.EmailsOpened + lead.Engagement.EmailsClicked + lead.Engagement.WebVisits + lead.Engagement.FormSubmissions
 
 	return resp
 }
 
 func (uc *leadUseCase) mapLeadToBriefResponse(lead *domain.Lead) *dto.LeadBriefResponse {
-	var ownerID *string
-	if lead.OwnerID != nil {
-		s := lead.OwnerID.String()
-		ownerID = &s
-	}
-
-	return &dto.LeadBriefResponse{
+	resp := &dto.LeadBriefResponse{
 		ID:        lead.ID.String(),
-		FirstName: lead.FirstName,
-		LastName:  lead.LastName,
-		FullName:  lead.FirstName + " " + lead.LastName,
-		Email:     lead.Email,
-		Company:   lead.Company,
+		FirstName: lead.Contact.FirstName,
+		LastName:  lead.Contact.LastName,
+		FullName:  lead.Contact.FullName(),
+		Email:     lead.Contact.Email,
+		Company:   dto.StringPtr(lead.Company.Name),
 		Status:    string(lead.Status),
-		Score:     lead.Score,
-		Rating:    lead.GetRating(),
-		OwnerID:   ownerID,
+		Score:     lead.Score.Score,
+		Rating:    string(lead.Rating),
 		CreatedAt: lead.CreatedAt,
 	}
-}
 
-func (uc *leadUseCase) mapFilterToDomain(filter *dto.LeadFilterRequest) domain.LeadFilter {
-	domainFilter := domain.LeadFilter{}
-
-	if filter == nil {
-		return domainFilter
+	if lead.OwnerID != nil {
+		resp.OwnerID = dto.StringPtr(lead.OwnerID.String())
 	}
 
-	// Map statuses
-	if len(filter.Statuses) > 0 {
-		domainFilter.Statuses = make([]domain.LeadStatus, len(filter.Statuses))
-		for i, s := range filter.Statuses {
-			domainFilter.Statuses[i] = mapLeadStatus(s)
-		}
-	}
-
-	// Map sources
-	if len(filter.Sources) > 0 {
-		domainFilter.Sources = make([]domain.LeadSource, len(filter.Sources))
-		for i, s := range filter.Sources {
-			domainFilter.Sources[i] = mapLeadSource(s)
-		}
-	}
-
-	// Map owner IDs
-	if len(filter.OwnerIDs) > 0 {
-		domainFilter.OwnerIDs = make([]uuid.UUID, 0, len(filter.OwnerIDs))
-		for _, id := range filter.OwnerIDs {
-			if parsed, err := uuid.Parse(id); err == nil {
-				domainFilter.OwnerIDs = append(domainFilter.OwnerIDs, parsed)
-			}
-		}
-	}
-
-	domainFilter.Unassigned = filter.Unassigned
-	domainFilter.MinScore = filter.MinScore
-	domainFilter.MaxScore = filter.MaxScore
-	domainFilter.SearchQuery = filter.SearchQuery
-	domainFilter.Tags = filter.Tags
-
-	// Parse dates
-	if filter.CreatedAfter != nil {
-		if t, err := time.Parse(time.RFC3339, *filter.CreatedAfter); err == nil {
-			domainFilter.CreatedAfter = &t
-		}
-	}
-	if filter.CreatedBefore != nil {
-		if t, err := time.Parse(time.RFC3339, *filter.CreatedBefore); err == nil {
-			domainFilter.CreatedBefore = &t
-		}
-	}
-	if filter.UpdatedAfter != nil {
-		if t, err := time.Parse(time.RFC3339, *filter.UpdatedAfter); err == nil {
-			domainFilter.UpdatedAfter = &t
-		}
-	}
-
-	// Parse campaign ID
-	if filter.CampaignID != nil {
-		if parsed, err := uuid.Parse(*filter.CampaignID); err == nil {
-			domainFilter.CampaignID = &parsed
-		}
-	}
-
-	return domainFilter
-}
-
-func (uc *leadUseCase) publishEvent(ctx context.Context, event domain.DomainEvent) error {
-	if uc.eventPublisher == nil {
-		return nil
-	}
-
-	return uc.eventPublisher.Publish(ctx, ports.Event{
-		ID:            event.EventID().String(),
-		Type:          event.EventType(),
-		AggregateID:   event.AggregateID().String(),
-		AggregateType: event.AggregateType(),
-		TenantID:      event.TenantID().String(),
-		OccurredAt:    event.OccurredAt(),
-		Version:       event.Version(),
-	})
-}
-
-func (uc *leadUseCase) indexLead(ctx context.Context, lead *domain.Lead) {
-	if uc.searchService == nil {
-		return
-	}
-
-	searchable := ports.SearchableLead{
-		ID:        lead.ID,
-		TenantID:  lead.TenantID,
-		FirstName: lead.FirstName,
-		LastName:  lead.LastName,
-		Email:     lead.Email,
-		Company:   lead.Company,
-		Phone:     lead.Phone,
-		Status:    string(lead.Status),
-		Source:    string(lead.Source),
-		Score:     lead.Score,
-		Tags:      lead.Tags,
-		OwnerID:   lead.OwnerID,
-		CreatedAt: lead.CreatedAt,
-		UpdatedAt: lead.UpdatedAt,
-	}
-
-	uc.searchService.IndexLead(ctx, searchable)
-}
-
-func (uc *leadUseCase) invalidateLeadCache(ctx context.Context, tenantID uuid.UUID) {
-	if uc.cacheService == nil {
-		return
-	}
-
-	pattern := "lead:" + tenantID.String() + ":*"
-	uc.cacheService.DeletePattern(ctx, pattern)
-}
-
-// ============================================================================
-// Mapping Helpers
-// ============================================================================
-
-func mapLeadSource(source string) domain.LeadSource {
-	switch source {
-	case "website":
-		return domain.LeadSourceWebsite
-	case "referral":
-		return domain.LeadSourceReferral
-	case "social_media":
-		return domain.LeadSourceSocialMedia
-	case "email_campaign":
-		return domain.LeadSourceEmailCampaign
-	case "cold_call":
-		return domain.LeadSourceColdCall
-	case "trade_show":
-		return domain.LeadSourceTradeShow
-	case "advertisement":
-		return domain.LeadSourceAdvertisement
-	case "partner":
-		return domain.LeadSourcePartner
-	default:
-		return domain.LeadSourceOther
-	}
-}
-
-func mapLeadStatus(status string) domain.LeadStatus {
-	switch status {
-	case "new":
-		return domain.LeadStatusNew
-	case "contacted":
-		return domain.LeadStatusContacted
-	case "qualified":
-		return domain.LeadStatusQualified
-	case "unqualified":
-		return domain.LeadStatusUnqualified
-	case "converted":
-		return domain.LeadStatusConverted
-	case "nurturing":
-		return domain.LeadStatusNurturing
-	default:
-		return domain.LeadStatusNew
-	}
-}
-
-func mapAddressDTOToDomain(addr *dto.AddressDTO) *domain.Address {
-	if addr == nil {
-		return nil
-	}
-	return &domain.Address{
-		Street1:    addr.Street1,
-		Street2:    addr.Street2,
-		City:       addr.City,
-		State:      addr.State,
-		PostalCode: addr.PostalCode,
-		Country:    addr.Country,
-	}
-}
-
-func mapAddressDomainToDTO(addr *domain.Address) *dto.AddressDTO {
-	if addr == nil {
-		return nil
-	}
-	return &dto.AddressDTO{
-		Street1:    addr.Street1,
-		Street2:    addr.Street2,
-		City:       addr.City,
-		State:      addr.State,
-		PostalCode: addr.PostalCode,
-		Country:    addr.Country,
-	}
-}
-
-func timePtr(t time.Time) *time.Time {
-	return &t
+	return resp
 }

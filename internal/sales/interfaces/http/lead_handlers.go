@@ -32,7 +32,7 @@ func (h *Handler) CreateLead(w http.ResponseWriter, r *http.Request) {
 
 	lead, err := h.leadUseCase.Create(ctx, tenantID, ptrToUUID(userID), &req)
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
@@ -56,7 +56,7 @@ func (h *Handler) GetLead(w http.ResponseWriter, r *http.Request) {
 
 	lead, err := h.leadUseCase.GetByID(ctx, tenantID, leadID)
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
@@ -88,7 +88,7 @@ func (h *Handler) UpdateLead(w http.ResponseWriter, r *http.Request) {
 
 	lead, err := h.leadUseCase.Update(ctx, tenantID, leadID, ptrToUUID(userID), &req)
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
@@ -113,7 +113,7 @@ func (h *Handler) DeleteLead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.leadUseCase.Delete(ctx, tenantID, leadID, ptrToUUID(userID)); err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
@@ -134,11 +134,11 @@ func (h *Handler) ListLeads(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.leadUseCase.List(ctx, tenantID, req)
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
-	h.respondList(w, result.Leads, result.Total, req.Page, req.PageSize)
+	h.respondList(w, result.Leads, result.Pagination.TotalItems, req.Page, req.PageSize)
 }
 
 // buildLeadFilterRequest builds a LeadFilterRequest from query parameters.
@@ -220,7 +220,7 @@ func (h *Handler) QualifyLead(w http.ResponseWriter, r *http.Request) {
 
 	lead, err := h.leadUseCase.Qualify(ctx, tenantID, leadID, ptrToUUID(userID), &req)
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
@@ -252,7 +252,7 @@ func (h *Handler) DisqualifyLead(w http.ResponseWriter, r *http.Request) {
 
 	lead, err := h.leadUseCase.Disqualify(ctx, tenantID, leadID, ptrToUUID(userID), &req)
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
@@ -282,9 +282,9 @@ func (h *Handler) ConvertLead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.leadUseCase.ConvertToOpportunity(ctx, tenantID, leadID, ptrToUUID(userID), &req)
+	result, err := h.leadUseCase.Convert(ctx, tenantID, leadID, ptrToUUID(userID), &req)
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
@@ -310,7 +310,7 @@ func (h *Handler) ReactivateLead(w http.ResponseWriter, r *http.Request) {
 
 	lead, err := h.leadUseCase.Nurture(ctx, tenantID, leadID, ptrToUUID(userID), &dto.NurtureLeadRequest{})
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
@@ -346,7 +346,7 @@ func (h *Handler) AssignLead(w http.ResponseWriter, r *http.Request) {
 
 	lead, err := h.leadUseCase.Assign(ctx, tenantID, leadID, ptrToUUID(userID), &req)
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
@@ -375,7 +375,7 @@ func (h *Handler) UnassignLead(w http.ResponseWriter, r *http.Request) {
 		OwnerID: "",
 	})
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
@@ -403,41 +403,22 @@ func (h *Handler) BulkAssignLeads(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.leadUseCase.BulkAssign(ctx, tenantID, ptrToUUID(userID), &req); err != nil {
-		h.respondError(w, h.mapAppError(err))
+	count, err := h.leadUseCase.BulkAssign(ctx, tenantID, ptrToUUID(userID), &req)
+	if err != nil {
+		h.respondError(w, h.toError(err))
 		return
 	}
 
 	h.respondJSON(w, http.StatusOK, map[string]any{
-		"message": "leads assigned successfully",
+		"message":        "leads assigned successfully",
+		"assigned_count": count,
 	})
 }
 
 // BulkUpdateLeadStatus handles POST /leads/bulk/status
+// Note: This endpoint is not yet implemented - bulk status updates should be done individually
 func (h *Handler) BulkUpdateLeadStatus(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	tenantID, err := h.getTenantID(ctx)
-	if err != nil {
-		h.respondError(w, ErrUnauthorized("tenant context required"))
-		return
-	}
-
-	userID, _ := h.getUserID(ctx)
-
-	var req dto.BulkUpdateLeadStatusRequest
-	if err := h.decodeJSON(r, &req); err != nil {
-		h.respondError(w, err)
-		return
-	}
-
-	if err := h.leadUseCase.BulkUpdateStatus(ctx, tenantID, ptrToUUID(userID), &req); err != nil {
-		h.respondError(w, h.mapAppError(err))
-		return
-	}
-
-	h.respondJSON(w, http.StatusOK, map[string]any{
-		"message": "lead statuses updated successfully",
-	})
+	h.respondError(w, ErrUnprocessableEntity("bulk status update not yet implemented"))
 }
 
 // BulkDeleteLeads handles DELETE /leads/bulk
@@ -460,7 +441,7 @@ func (h *Handler) BulkDeleteLeads(w http.ResponseWriter, r *http.Request) {
 	for _, leadID := range req.LeadIDs {
 		userID, _ := h.getUserID(ctx)
 		if err := h.leadUseCase.Delete(ctx, tenantID, leadID, ptrToUUID(userID)); err != nil {
-			h.respondError(w, h.mapAppError(err))
+			h.respondError(w, h.toError(err))
 			return
 		}
 	}
@@ -486,7 +467,7 @@ func (h *Handler) GetLeadStatistics(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := h.leadUseCase.GetStatistics(ctx, tenantID)
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
@@ -513,11 +494,11 @@ func (h *Handler) GetLeadsByOwner(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.leadUseCase.List(ctx, tenantID, req)
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
-	h.respondList(w, result.Leads, result.Total, req.Page, req.PageSize)
+	h.respondList(w, result.Leads, result.Pagination.TotalItems, req.Page, req.PageSize)
 }
 
 // GetHighScoreLeads handles GET /leads/high-score
@@ -535,11 +516,11 @@ func (h *Handler) GetHighScoreLeads(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.leadUseCase.List(ctx, tenantID, req)
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
-	h.respondList(w, result.Leads, result.Total, req.Page, req.PageSize)
+	h.respondList(w, result.Leads, result.Pagination.TotalItems, req.Page, req.PageSize)
 }
 
 // GetUnassignedLeads handles GET /leads/unassigned
@@ -557,11 +538,11 @@ func (h *Handler) GetUnassignedLeads(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.leadUseCase.List(ctx, tenantID, req)
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
-	h.respondList(w, result.Leads, result.Total, req.Page, req.PageSize)
+	h.respondList(w, result.Leads, result.Pagination.TotalItems, req.Page, req.PageSize)
 }
 
 // GetStaleLeads handles GET /leads/stale
@@ -583,11 +564,11 @@ func (h *Handler) GetStaleLeads(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.leadUseCase.List(ctx, tenantID, req)
 	if err != nil {
-		h.respondError(w, h.mapAppError(err))
+		h.respondError(w, h.toError(err))
 		return
 	}
 
-	h.respondList(w, result.Leads, result.Total, req.Page, req.PageSize)
+	h.respondList(w, result.Leads, result.Pagination.TotalItems, req.Page, req.PageSize)
 }
 
 // ============================================================================

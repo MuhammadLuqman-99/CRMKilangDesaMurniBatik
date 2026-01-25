@@ -908,7 +908,7 @@ func (r *LeadRepository) toDomain(row *leadRow) (*domain.Lead, error) {
 
 	// Conversion info
 	if row.ConvertedAt.Valid {
-		lead.ConversionInfo = &domain.LeadConversionInfo{
+		lead.ConversionInfo = &domain.ConversionInfo{
 			ConvertedAt:   row.ConvertedAt.Time,
 			ConvertedBy:   row.ConvertedBy.UUID,
 			OpportunityID: row.OpportunityID.UUID,
@@ -923,7 +923,7 @@ func (r *LeadRepository) toDomain(row *leadRow) (*domain.Lead, error) {
 
 	// Disqualify info
 	if row.DisqualifiedAt.Valid {
-		lead.DisqualifyInfo = &domain.LeadDisqualifyInfo{
+		lead.DisqualifyInfo = &domain.DisqualifyInfo{
 			DisqualifiedAt: row.DisqualifiedAt.Time,
 			DisqualifiedBy: row.DisqualifiedBy.UUID,
 			Reason:         row.DisqualifyReason.String,

@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/domain"
+	"github.com/kilang-desa-murni/crm/internal/customer/domain"
 )
 
 // Cache errors

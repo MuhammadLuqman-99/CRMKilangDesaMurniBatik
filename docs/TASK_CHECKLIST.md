@@ -455,4 +455,4 @@
 ---
 
 **Last Updated**: 2026-01-25
-**Repository**: https://github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik
+**Repository**: https://github.com/kilang-desa-murni/crm

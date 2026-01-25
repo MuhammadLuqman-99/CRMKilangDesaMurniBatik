@@ -119,7 +119,7 @@ func (r *PipelineRepository) Create(ctx context.Context, pipeline *domain.Pipeli
 		pipeline.Version,
 	)
 	if err != nil {
-		if isUniqueViolation(err) {
+		if IsUniqueViolation(err) {
 			return domain.ErrPipelineAlreadyExists
 		}
 		return fmt.Errorf("failed to create pipeline: %w", err)
@@ -542,7 +542,7 @@ func (r *PipelineRepository) AddStage(ctx context.Context, tenantID, pipelineID 
 		stage.UpdatedAt,
 	)
 	if err != nil {
-		if isUniqueViolation(err) {
+		if IsUniqueViolation(err) {
 			return domain.ErrStageAlreadyExists
 		}
 		return fmt.Errorf("failed to add stage: %w", err)

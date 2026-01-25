@@ -10,8 +10,8 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/application/ports"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/domain"
+	"github.com/kilang-desa-murni/crm/internal/customer/application/ports"
+	"github.com/kilang-desa-murni/crm/internal/customer/domain"
 )
 
 const (

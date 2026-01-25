@@ -6,10 +6,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"crm-kilang-desa-murni-batik/internal/sales/application"
-	"crm-kilang-desa-murni-batik/internal/sales/application/dto"
-	"crm-kilang-desa-murni-batik/internal/sales/application/ports"
-	"crm-kilang-desa-murni-batik/internal/sales/domain"
+	"github.com/kilang-desa-murni/crm/internal/sales/application"
+	"github.com/kilang-desa-murni/crm/internal/sales/application/dto"
+	"github.com/kilang-desa-murni/crm/internal/sales/application/ports"
+	"github.com/kilang-desa-murni/crm/internal/sales/domain"
 )
 
 // ============================================================================
@@ -84,26 +84,25 @@ func NewPipelineUseCase(
 
 // Create creates a new pipeline.
 func (uc *pipelineUseCase) Create(ctx context.Context, tenantID, userID uuid.UUID, req *dto.CreatePipelineRequest) (*dto.PipelineResponse, error) {
-	// Create pipeline
-	pipelineID := uc.idGenerator.GenerateID()
-	pipeline, err := domain.NewPipeline(
-		pipelineID,
-		tenantID,
-		req.Name,
-		userID,
-	)
+	// Determine currency
+	currency := "USD"
+	if req.DefaultCurrency != "" {
+		currency = req.DefaultCurrency
+	}
+
+	// Create pipeline using domain factory
+	// NewPipeline(tenantID uuid.UUID, name, currency string, createdBy uuid.UUID)
+	pipeline, err := domain.NewPipeline(tenantID, req.Name, currency, userID)
 	if err != nil {
 		return nil, application.WrapError(application.ErrCodeValidation, "failed to create pipeline", err)
 	}
 
-	// Set optional fields
+	// Set optional fields - Description is string, not *string
 	if req.Description != nil {
-		pipeline.Description = req.Description
+		pipeline.Description = *req.Description
 	}
 	pipeline.IsDefault = req.IsDefault
-	pipeline.AllowSkipStages = req.AllowSkipStages
-	pipeline.RequireWonReason = req.RequireWonReason
-	pipeline.RequireLostReason = req.RequireLostReason
+	// Note: AllowSkipStages, RequireWonReason, RequireLostReason don't exist in domain
 
 	if req.WinReasons != nil {
 		pipeline.WinReasons = req.WinReasons
@@ -111,30 +110,42 @@ func (uc *pipelineUseCase) Create(ctx context.Context, tenantID, userID uuid.UUI
 	if req.LossReasons != nil {
 		pipeline.LossReasons = req.LossReasons
 	}
-	if req.DefaultCurrency != "" {
-		pipeline.DefaultCurrency = req.DefaultCurrency
-	}
 
 	// Add custom fields schema
 	if len(req.CustomFieldsSchema) > 0 {
-		pipeline.CustomFieldsSchema = make([]*domain.CustomFieldSchema, len(req.CustomFieldsSchema))
+		pipeline.CustomFields = make([]domain.CustomFieldDef, len(req.CustomFieldsSchema))
 		for i, schema := range req.CustomFieldsSchema {
-			pipeline.CustomFieldsSchema[i] = uc.mapCustomFieldSchemaDTOToDomain(schema)
+			pipeline.CustomFields[i] = uc.mapCustomFieldSchemaDTOToDomain(schema)
 		}
 	}
 
-	// Add stages
+	// Add stages if provided (replacing default stages)
 	if len(req.Stages) > 0 {
+		// Clear default stages and add requested ones
+		pipeline.Stages = nil
 		for _, stageReq := range req.Stages {
-			stage := uc.createStageFromRequest(stageReq)
-			if err := pipeline.AddStage(stage); err != nil {
-				return nil, application.WrapError(application.ErrCodeValidation, "failed to add stage", err)
+			stageType := domain.StageType(stageReq.Type)
+			// Probability is int (not *int) in CreateStageRequest
+			probability := stageReq.Probability
+			// AddStage(name string, stageType StageType, probability int) (*Stage, error)
+			stage, err := pipeline.AddStage(stageReq.Name, stageType, probability)
+			if err != nil {
+				return nil, application.WrapError(application.ErrCodeValidation, "failed to add stage: "+stageReq.Name, err)
+			}
+			// Set additional stage properties
+			if stageReq.Description != nil {
+				stage.Description = *stageReq.Description
+			}
+			// Color is string (not *string) in CreateStageRequest
+			if stageReq.Color != "" {
+				stage.Color = stageReq.Color
+			}
+			if stageReq.RottenDays != nil {
+				stage.RottenDays = *stageReq.RottenDays
 			}
 		}
-	} else {
-		// Add default stages
-		uc.addDefaultStages(pipeline)
 	}
+	// Default stages are already added by NewPipeline
 
 	// Validate pipeline has required stage types
 	if err := uc.validatePipelineStages(pipeline); err != nil {
@@ -143,7 +154,7 @@ func (uc *pipelineUseCase) Create(ctx context.Context, tenantID, userID uuid.UUI
 
 	// If this is the default pipeline, unset other defaults
 	if req.IsDefault {
-		if err := uc.unsetOtherDefaults(ctx, tenantID, pipelineID); err != nil {
+		if err := uc.unsetOtherDefaults(ctx, tenantID, pipeline.ID); err != nil {
 			return nil, application.WrapError(application.ErrCodeInternal, "failed to update default pipeline", err)
 		}
 	}
@@ -153,11 +164,9 @@ func (uc *pipelineUseCase) Create(ctx context.Context, tenantID, userID uuid.UUI
 		return nil, application.WrapError(application.ErrCodeInternal, "failed to save pipeline", err)
 	}
 
-	// Publish events
-	for _, event := range pipeline.Events() {
-		uc.publishEvent(ctx, event)
-	}
-	pipeline.ClearEvents()
+	// Publish pipeline created event (Pipeline doesn't have events storage)
+	event := domain.NewPipelineCreatedEvent(pipeline)
+	uc.publishEvent(ctx, event)
 
 	// Invalidate cache
 	uc.invalidatePipelineCache(ctx, tenantID)
@@ -187,22 +196,19 @@ func (uc *pipelineUseCase) Update(ctx context.Context, tenantID, pipelineID, use
 		return nil, application.ErrVersionMismatch(req.Version, pipeline.Version)
 	}
 
-	// Update fields
+	// Update fields using domain method
+	name := ""
 	if req.Name != nil {
-		pipeline.Name = *req.Name
+		name = *req.Name
 	}
+	description := pipeline.Description
 	if req.Description != nil {
-		pipeline.Description = req.Description
+		description = *req.Description
 	}
-	if req.AllowSkipStages != nil {
-		pipeline.AllowSkipStages = *req.AllowSkipStages
-	}
-	if req.RequireWonReason != nil {
-		pipeline.RequireWonReason = *req.RequireWonReason
-	}
-	if req.RequireLostReason != nil {
-		pipeline.RequireLostReason = *req.RequireLostReason
-	}
+	pipeline.Update(name, description)
+
+	// Note: AllowSkipStages, RequireWonReason, RequireLostReason don't exist in domain
+
 	if req.WinReasons != nil {
 		pipeline.WinReasons = req.WinReasons
 	}
@@ -210,14 +216,14 @@ func (uc *pipelineUseCase) Update(ctx context.Context, tenantID, pipelineID, use
 		pipeline.LossReasons = req.LossReasons
 	}
 	if req.DefaultCurrency != nil {
-		pipeline.DefaultCurrency = *req.DefaultCurrency
+		pipeline.Currency = *req.DefaultCurrency
 	}
 
 	// Update custom fields schema
 	if req.CustomFieldsSchema != nil {
-		pipeline.CustomFieldsSchema = make([]*domain.CustomFieldSchema, len(req.CustomFieldsSchema))
+		pipeline.CustomFields = make([]domain.CustomFieldDef, len(req.CustomFieldsSchema))
 		for i, schema := range req.CustomFieldsSchema {
-			pipeline.CustomFieldsSchema[i] = uc.mapCustomFieldSchemaDTOToDomain(schema)
+			pipeline.CustomFields[i] = uc.mapCustomFieldSchemaDTOToDomain(schema)
 		}
 	}
 
@@ -226,27 +232,20 @@ func (uc *pipelineUseCase) Update(ctx context.Context, tenantID, pipelineID, use
 		if err := uc.unsetOtherDefaults(ctx, tenantID, pipelineID); err != nil {
 			return nil, application.WrapError(application.ErrCodeInternal, "failed to update default pipeline", err)
 		}
-		pipeline.IsDefault = true
+		pipeline.SetAsDefault()
 	}
 
-	// Update metadata
-	pipeline.UpdatedAt = time.Now()
-	pipeline.UpdatedBy = userID
+	// Update version
 	pipeline.Version++
-
-	// Add update event
-	pipeline.AddEvent(domain.NewPipelineUpdatedEvent(pipeline, userID))
 
 	// Save changes
 	if err := uc.pipelineRepo.Update(ctx, pipeline); err != nil {
 		return nil, application.WrapError(application.ErrCodeInternal, "failed to update pipeline", err)
 	}
 
-	// Publish events
-	for _, event := range pipeline.Events() {
-		uc.publishEvent(ctx, event)
-	}
-	pipeline.ClearEvents()
+	// Publish update event (Pipeline doesn't have events storage)
+	event := domain.NewPipelineUpdatedEvent(pipeline)
+	uc.publishEvent(ctx, event)
 
 	// Invalidate cache
 	uc.invalidatePipelineCache(ctx, tenantID)
@@ -277,9 +276,7 @@ func (uc *pipelineUseCase) Delete(ctx context.Context, tenantID, pipelineID, use
 		return application.WrapError(application.ErrCodeInternal, "failed to delete pipeline", err)
 	}
 
-	// Publish delete event
-	event := domain.NewPipelineDeletedEvent(pipeline, userID)
-	uc.publishEvent(ctx, event)
+	// Note: PipelineDeletedEvent doesn't exist in domain, skip publishing
 
 	// Invalidate cache
 	uc.invalidatePipelineCache(ctx, tenantID)
@@ -365,10 +362,8 @@ func (uc *pipelineUseCase) SetDefault(ctx context.Context, tenantID, pipelineID,
 		return nil, application.WrapError(application.ErrCodeInternal, "failed to update default pipeline", err)
 	}
 
-	// Set as default
-	pipeline.IsDefault = true
-	pipeline.UpdatedAt = time.Now()
-	pipeline.UpdatedBy = userID
+	// Set as default using domain method
+	pipeline.SetAsDefault()
 	pipeline.Version++
 
 	// Save changes
@@ -389,21 +384,16 @@ func (uc *pipelineUseCase) Activate(ctx context.Context, tenantID, pipelineID, u
 		return nil, application.ErrPipelineNotFound(pipelineID)
 	}
 
-	// Activate
-	if err := pipeline.Activate(userID); err != nil {
-		return nil, application.WrapError(application.ErrCodeConflict, err.Error(), err)
-	}
+	// Activate - domain method doesn't take arguments or return error
+	pipeline.Activate()
+	pipeline.Version++
 
 	// Save changes
 	if err := uc.pipelineRepo.Update(ctx, pipeline); err != nil {
 		return nil, application.WrapError(application.ErrCodeInternal, "failed to update pipeline", err)
 	}
 
-	// Publish events
-	for _, event := range pipeline.Events() {
-		uc.publishEvent(ctx, event)
-	}
-	pipeline.ClearEvents()
+	// Note: Pipeline doesn't have events storage
 
 	// Invalidate cache
 	uc.invalidatePipelineCache(ctx, tenantID)
@@ -432,21 +422,18 @@ func (uc *pipelineUseCase) Deactivate(ctx context.Context, tenantID, pipelineID,
 	}
 	_ = count
 
-	// Deactivate
-	if err := pipeline.Deactivate(userID); err != nil {
+	// Deactivate - domain method takes no args but returns error
+	if err := pipeline.Deactivate(); err != nil {
 		return nil, application.WrapError(application.ErrCodeConflict, err.Error(), err)
 	}
+	pipeline.Version++
 
 	// Save changes
 	if err := uc.pipelineRepo.Update(ctx, pipeline); err != nil {
 		return nil, application.WrapError(application.ErrCodeInternal, "failed to update pipeline", err)
 	}
 
-	// Publish events
-	for _, event := range pipeline.Events() {
-		uc.publishEvent(ctx, event)
-	}
-	pipeline.ClearEvents()
+	// Note: Pipeline doesn't have events storage
 
 	// Invalidate cache
 	uc.invalidatePipelineCache(ctx, tenantID)
@@ -468,20 +455,55 @@ func (uc *pipelineUseCase) Clone(ctx context.Context, tenantID, userID uuid.UUID
 		return nil, application.ErrPipelineNotFound(sourcePipelineID)
 	}
 
-	// Clone pipeline
-	clone, err := source.Clone(req.Name, userID)
-	if err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to clone pipeline", err)
+	// Clone pipeline manually (Pipeline doesn't have Clone method)
+	now := time.Now().UTC()
+	cloneID := uuid.New()
+
+	// Clone stages
+	clonedStages := make([]*domain.Stage, len(source.Stages))
+	for i, s := range source.Stages {
+		clonedStages[i] = &domain.Stage{
+			ID:          uuid.New(),
+			PipelineID:  cloneID,
+			Name:        s.Name,
+			Description: s.Description,
+			Type:        s.Type,
+			Order:       s.Order,
+			Probability: s.Probability,
+			Color:       s.Color,
+			IsActive:    s.IsActive,
+			RottenDays:  s.RottenDays,
+			AutoActions: s.AutoActions,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+	}
+
+	clone := &domain.Pipeline{
+		ID:           cloneID,
+		TenantID:     tenantID,
+		Name:         req.Name,
+		Description:  source.Description,
+		IsDefault:    false,
+		IsActive:     true,
+		Currency:     source.Currency,
+		Stages:       clonedStages,
+		WinReasons:   source.WinReasons,
+		LossReasons:  source.LossReasons,
+		CreatedBy:    userID,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+		Version:      1,
 	}
 
 	// Set description if provided
 	if req.Description != nil {
-		clone.Description = req.Description
+		clone.Description = *req.Description
 	}
 
 	// Include or exclude custom fields
-	if !req.IncludeCustomFields {
-		clone.CustomFieldsSchema = nil
+	if req.IncludeCustomFields {
+		clone.CustomFields = source.CustomFields
 	}
 
 	// Save clone
@@ -506,75 +528,26 @@ func (uc *pipelineUseCase) AddStage(ctx context.Context, tenantID, pipelineID, u
 		return nil, application.ErrPipelineNotFound(pipelineID)
 	}
 
-	// Create stage
-	stage := &domain.Stage{
-		ID:          uc.idGenerator.GenerateID(),
-		PipelineID:  pipelineID,
-		Name:        req.Name,
-		Description: req.Description,
-		Type:        domain.StageType(req.Type),
-		Probability: req.Probability,
-		Color:       req.Color,
-		IsActive:    true,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-
-	if req.RottenDays != nil {
-		stage.RottenDays = req.RottenDays
-	}
-	if req.RequiredFields != nil {
-		stage.RequiredFields = req.RequiredFields
-	}
-
-	// Determine order
-	if req.InsertAfterID != nil {
-		afterID, _ := uuid.Parse(*req.InsertAfterID)
-		for _, s := range pipeline.Stages {
-			if s.ID == afterID {
-				stage.Order = s.Order + 1
-				break
-			}
-		}
-		// Shift other stages
-		for _, s := range pipeline.Stages {
-			if s.Order >= stage.Order {
-				s.Order++
-			}
-		}
-	} else if req.InsertBeforeID != nil {
-		beforeID, _ := uuid.Parse(*req.InsertBeforeID)
-		for _, s := range pipeline.Stages {
-			if s.ID == beforeID {
-				stage.Order = s.Order
-				break
-			}
-		}
-		// Shift other stages
-		for _, s := range pipeline.Stages {
-			if s.Order >= stage.Order {
-				s.Order++
-			}
-		}
-	} else {
-		// Add at end (but before won/lost stages)
-		maxOrder := 0
-		for _, s := range pipeline.Stages {
-			if s.Type == domain.StageTypeOpen && s.Order > maxOrder {
-				maxOrder = s.Order
-			}
-		}
-		stage.Order = maxOrder + 1
-	}
-
-	// Add stage
-	if err := pipeline.AddStage(stage); err != nil {
+	// Use domain's AddStage method
+	// AddStage(name string, stageType StageType, probability int) (*Stage, error)
+	stageType := domain.StageType(req.Type)
+	stage, err := pipeline.AddStage(req.Name, stageType, req.Probability)
+	if err != nil {
 		return nil, application.WrapError(application.ErrCodeValidation, err.Error(), err)
 	}
 
+	// Set additional stage properties
+	if req.Description != nil {
+		stage.Description = *req.Description
+	}
+	stage.Color = req.Color
+	if req.RottenDays != nil {
+		stage.RottenDays = *req.RottenDays
+	}
+	// Note: RequiredFields doesn't exist on Stage
+
 	// Update metadata
-	pipeline.UpdatedAt = time.Now()
-	pipeline.UpdatedBy = userID
+	pipeline.UpdatedAt = time.Now().UTC()
 	pipeline.Version++
 
 	// Save changes
@@ -582,11 +555,7 @@ func (uc *pipelineUseCase) AddStage(ctx context.Context, tenantID, pipelineID, u
 		return nil, application.WrapError(application.ErrCodeInternal, "failed to update pipeline", err)
 	}
 
-	// Publish events
-	for _, event := range pipeline.Events() {
-		uc.publishEvent(ctx, event)
-	}
-	pipeline.ClearEvents()
+	// Note: Pipeline doesn't have events storage
 
 	// Invalidate cache
 	uc.invalidatePipelineCache(ctx, tenantID)
@@ -618,7 +587,7 @@ func (uc *pipelineUseCase) UpdateStage(ctx context.Context, tenantID, pipelineID
 		stage.Name = *req.Name
 	}
 	if req.Description != nil {
-		stage.Description = req.Description
+		stage.Description = *req.Description
 	}
 	if req.Probability != nil {
 		stage.Probability = *req.Probability
@@ -627,32 +596,32 @@ func (uc *pipelineUseCase) UpdateStage(ctx context.Context, tenantID, pipelineID
 		stage.Color = *req.Color
 	}
 	if req.RottenDays != nil {
-		stage.RottenDays = req.RottenDays
+		stage.RottenDays = *req.RottenDays
 	}
-	if req.RequiredFields != nil {
-		stage.RequiredFields = req.RequiredFields
-	}
+	// Note: RequiredFields doesn't exist on Stage
+
+	// Map auto actions (AutoAction has Type string, Config map, DelayHours int)
 	if req.AutoActions != nil {
-		stage.AutoActions = make([]*domain.StageAutoAction, len(req.AutoActions))
+		stage.AutoActions = make([]domain.AutoAction, len(req.AutoActions))
 		for i, action := range req.AutoActions {
-			stage.AutoActions[i] = &domain.StageAutoAction{
-				Type:       domain.AutoActionType(action.Type),
-				Trigger:    domain.ActionTrigger(action.Trigger),
-				Config:     action.Config,
-				DelayHours: action.DelayHours,
-				IsActive:   action.IsActive,
+			autoAction := domain.AutoAction{
+				Type:   action.Type,
+				Config: action.Config,
 			}
+			if action.DelayHours != nil {
+				autoAction.DelayHours = *action.DelayHours
+			}
+			stage.AutoActions[i] = autoAction
 		}
 	}
 	if req.IsActive != nil {
 		stage.IsActive = *req.IsActive
 	}
 
-	stage.UpdatedAt = time.Now()
+	stage.UpdatedAt = time.Now().UTC()
 
 	// Update metadata
-	pipeline.UpdatedAt = time.Now()
-	pipeline.UpdatedBy = userID
+	pipeline.UpdatedAt = time.Now().UTC()
 	pipeline.Version++
 
 	// Save changes
@@ -690,8 +659,7 @@ func (uc *pipelineUseCase) RemoveStage(ctx context.Context, tenantID, pipelineID
 	}
 
 	// Update metadata
-	pipeline.UpdatedAt = time.Now()
-	pipeline.UpdatedBy = userID
+	pipeline.UpdatedAt = time.Now().UTC()
 	pipeline.Version++
 
 	// Save changes
@@ -699,11 +667,7 @@ func (uc *pipelineUseCase) RemoveStage(ctx context.Context, tenantID, pipelineID
 		return nil, application.WrapError(application.ErrCodeInternal, "failed to update pipeline", err)
 	}
 
-	// Publish events
-	for _, event := range pipeline.Events() {
-		uc.publishEvent(ctx, event)
-	}
-	pipeline.ClearEvents()
+	// Note: Pipeline doesn't have events storage
 
 	// Invalidate cache
 	uc.invalidatePipelineCache(ctx, tenantID)
@@ -718,21 +682,38 @@ func (uc *pipelineUseCase) ReorderStages(ctx context.Context, tenantID, pipeline
 		return nil, application.ErrPipelineNotFound(pipelineID)
 	}
 
-	// Build order map
-	orderMap := make(map[uuid.UUID]int)
+	// Build stage ID list in order (domain expects []uuid.UUID in desired order)
+	// Sort by order from request
+	type stageOrder struct {
+		id    uuid.UUID
+		order int
+	}
+	orders := make([]stageOrder, 0, len(req.StageOrders))
 	for _, order := range req.StageOrders {
 		stageID, _ := uuid.Parse(order.StageID)
-		orderMap[stageID] = order.Order
+		orders = append(orders, stageOrder{id: stageID, order: order.Order})
+	}
+	// Sort by order
+	for i := 0; i < len(orders)-1; i++ {
+		for j := i + 1; j < len(orders); j++ {
+			if orders[j].order < orders[i].order {
+				orders[i], orders[j] = orders[j], orders[i]
+			}
+		}
+	}
+	// Build stage ID list
+	stageIDs := make([]uuid.UUID, len(orders))
+	for i, o := range orders {
+		stageIDs[i] = o.id
 	}
 
-	// Reorder stages
-	if err := pipeline.ReorderStages(orderMap); err != nil {
+	// Reorder stages - domain expects []uuid.UUID
+	if err := pipeline.ReorderStages(stageIDs); err != nil {
 		return nil, application.WrapError(application.ErrCodeValidation, err.Error(), err)
 	}
 
 	// Update metadata
-	pipeline.UpdatedAt = time.Now()
-	pipeline.UpdatedBy = userID
+	pipeline.UpdatedAt = time.Now().UTC()
 	pipeline.Version++
 
 	// Save changes
@@ -893,8 +874,13 @@ func (uc *pipelineUseCase) GetForecast(ctx context.Context, tenantID uuid.UUID, 
 		}
 		totalForecast += amount
 
-		// Group by period
-		periodKey := uc.getPeriodKey(opp.ExpectedCloseDate, req.GroupBy)
+		// Group by period - ExpectedCloseDate is *time.Time
+		var periodKey string
+		if opp.ExpectedCloseDate != nil {
+			periodKey = uc.getPeriodKey(*opp.ExpectedCloseDate, req.GroupBy)
+		} else {
+			periodKey = "Unknown"
+		}
 		if _, ok := byPeriod[periodKey]; !ok {
 			byPeriod[periodKey] = &dto.ForecastPeriodDTO{
 				Period: periodKey,
@@ -1087,64 +1073,76 @@ func (uc *pipelineUseCase) CreateFromTemplate(ctx context.Context, tenantID, use
 
 func (uc *pipelineUseCase) mapPipelineToResponse(ctx context.Context, pipeline *domain.Pipeline) *dto.PipelineResponse {
 	resp := &dto.PipelineResponse{
-		ID:                pipeline.ID.String(),
-		TenantID:          pipeline.TenantID.String(),
-		Name:              pipeline.Name,
-		Description:       pipeline.Description,
-		IsActive:          pipeline.IsActive,
-		IsDefault:         pipeline.IsDefault,
-		AllowSkipStages:   pipeline.AllowSkipStages,
-		RequireWonReason:  pipeline.RequireWonReason,
-		RequireLostReason: pipeline.RequireLostReason,
-		StageCount:        len(pipeline.Stages),
-		WinReasons:        pipeline.WinReasons,
-		LossReasons:       pipeline.LossReasons,
-		DefaultCurrency:   pipeline.DefaultCurrency,
-		CreatedAt:         pipeline.CreatedAt,
-		UpdatedAt:         pipeline.UpdatedAt,
-		CreatedBy:         pipeline.CreatedBy.String(),
-		UpdatedBy:         pipeline.UpdatedBy.String(),
-		Version:           pipeline.Version,
+		ID:              pipeline.ID.String(),
+		TenantID:        pipeline.TenantID.String(),
+		Name:            pipeline.Name,
+		IsActive:        pipeline.IsActive,
+		IsDefault:       pipeline.IsDefault,
+		StageCount:      len(pipeline.Stages),
+		WinReasons:      pipeline.WinReasons,
+		LossReasons:     pipeline.LossReasons,
+		DefaultCurrency: pipeline.Currency, // Domain uses Currency, not DefaultCurrency
+		CreatedAt:       pipeline.CreatedAt,
+		UpdatedAt:       pipeline.UpdatedAt,
+		CreatedBy:       pipeline.CreatedBy.String(),
+		Version:         pipeline.Version,
 	}
+
+	// Description is string in domain, *string in DTO
+	if pipeline.Description != "" {
+		resp.Description = &pipeline.Description
+	}
+
+	// Note: AllowSkipStages, RequireWonReason, RequireLostReason, UpdatedBy don't exist in domain
 
 	// Map stages
 	resp.Stages = make([]*dto.StageResponse, len(pipeline.Stages))
 	for i, stage := range pipeline.Stages {
-		resp.Stages[i] = &dto.StageResponse{
-			ID:             stage.ID.String(),
-			PipelineID:     pipeline.ID.String(),
-			Name:           stage.Name,
-			Description:    stage.Description,
-			Type:           string(stage.Type),
-			Order:          stage.Order,
-			Probability:    stage.Probability,
-			Color:          stage.Color,
-			IsActive:       stage.IsActive,
-			RottenDays:     stage.RottenDays,
-			RequiredFields: stage.RequiredFields,
-			CreatedAt:      stage.CreatedAt,
-			UpdatedAt:      stage.UpdatedAt,
+		stageResp := &dto.StageResponse{
+			ID:          stage.ID.String(),
+			PipelineID:  pipeline.ID.String(),
+			Name:        stage.Name,
+			Type:        string(stage.Type),
+			Order:       stage.Order,
+			Probability: stage.Probability,
+			Color:       stage.Color,
+			IsActive:    stage.IsActive,
+			CreatedAt:   stage.CreatedAt,
+			UpdatedAt:   stage.UpdatedAt,
 		}
 
-		// Map auto actions
+		// Description is string in domain, *string in DTO
+		if stage.Description != "" {
+			stageResp.Description = &stage.Description
+		}
+
+		// RottenDays is int in domain, *int in DTO
+		if stage.RottenDays > 0 {
+			stageResp.RottenDays = &stage.RottenDays
+		}
+
+		// Note: RequiredFields doesn't exist on Stage
+
+		// Map auto actions (AutoAction has Type string, Config map, DelayHours int)
 		if len(stage.AutoActions) > 0 {
-			resp.Stages[i].AutoActions = make([]*dto.StageAutoActionDTO, len(stage.AutoActions))
+			stageResp.AutoActions = make([]*dto.StageAutoActionDTO, len(stage.AutoActions))
 			for j, action := range stage.AutoActions {
-				resp.Stages[i].AutoActions[j] = &dto.StageAutoActionDTO{
-					Type:       string(action.Type),
-					Trigger:    string(action.Trigger),
+				delayHours := action.DelayHours
+				stageResp.AutoActions[j] = &dto.StageAutoActionDTO{
+					Type:       action.Type,
 					Config:     action.Config,
-					DelayHours: action.DelayHours,
-					IsActive:   action.IsActive,
+					DelayHours: &delayHours,
 				}
 			}
 		}
+
+		resp.Stages[i] = stageResp
 	}
 
 	// Map custom fields schema
-	if len(pipeline.CustomFieldsSchema) > 0 {
-		resp.CustomFieldsSchema = make([]*dto.CustomFieldSchemaDTO, len(pipeline.CustomFieldsSchema))
-		for i, schema := range pipeline.CustomFieldsSchema {
+	if len(pipeline.CustomFields) > 0 {
+		resp.CustomFieldsSchema = make([]*dto.CustomFieldSchemaDTO, len(pipeline.CustomFields))
+		for i, schema := range pipeline.CustomFields {
 			resp.CustomFieldsSchema[i] = uc.mapCustomFieldSchemaDomainToDTO(schema)
 		}
 	}
@@ -1153,31 +1151,43 @@ func (uc *pipelineUseCase) mapPipelineToResponse(ctx context.Context, pipeline *
 }
 
 func (uc *pipelineUseCase) createStageFromRequest(req *dto.CreateStageRequest) *domain.Stage {
+	now := time.Now().UTC()
 	stage := &domain.Stage{
-		ID:             uc.idGenerator.GenerateID(),
-		Name:           req.Name,
-		Description:    req.Description,
-		Type:           domain.StageType(req.Type),
-		Order:          req.Order,
-		Probability:    req.Probability,
-		Color:          req.Color,
-		IsActive:       true,
-		RottenDays:     req.RottenDays,
-		RequiredFields: req.RequiredFields,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:          uc.idGenerator.GenerateID(),
+		Name:        req.Name,
+		Type:        domain.StageType(req.Type),
+		Order:       req.Order,
+		Probability: req.Probability,
+		Color:       req.Color,
+		IsActive:    true,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
+	// Description is *string in DTO, string in domain
+	if req.Description != nil {
+		stage.Description = *req.Description
+	}
+
+	// RottenDays is *int in DTO, int in domain
+	if req.RottenDays != nil {
+		stage.RottenDays = *req.RottenDays
+	}
+
+	// Note: RequiredFields doesn't exist on Stage
+
+	// Map auto actions (AutoAction has Type string, Config map, DelayHours int)
 	if len(req.AutoActions) > 0 {
-		stage.AutoActions = make([]*domain.StageAutoAction, len(req.AutoActions))
+		stage.AutoActions = make([]domain.AutoAction, len(req.AutoActions))
 		for i, action := range req.AutoActions {
-			stage.AutoActions[i] = &domain.StageAutoAction{
-				Type:       domain.AutoActionType(action.Type),
-				Trigger:    domain.ActionTrigger(action.Trigger),
-				Config:     action.Config,
-				DelayHours: action.DelayHours,
-				IsActive:   action.IsActive,
+			autoAction := domain.AutoAction{
+				Type:   action.Type,
+				Config: action.Config,
 			}
+			if action.DelayHours != nil {
+				autoAction.DelayHours = *action.DelayHours
+			}
+			stage.AutoActions[i] = autoAction
 		}
 	}
 
@@ -1295,76 +1305,52 @@ func (uc *pipelineUseCase) unsetOtherDefaults(ctx context.Context, tenantID, exc
 	return nil
 }
 
-func (uc *pipelineUseCase) mapCustomFieldSchemaDTOToDomain(dto *dto.CustomFieldSchemaDTO) *domain.CustomFieldSchema {
-	schema := &domain.CustomFieldSchema{
-		Name:         dto.Name,
-		Label:        dto.Label,
-		Type:         domain.CustomFieldType(dto.Type),
-		Description:  dto.Description,
-		Required:     dto.Required,
-		DefaultValue: dto.DefaultValue,
-		DisplayOrder: dto.DisplayOrder,
-		IsActive:     dto.IsActive,
+func (uc *pipelineUseCase) mapCustomFieldSchemaDTOToDomain(dtoField *dto.CustomFieldSchemaDTO) domain.CustomFieldDef {
+	field := domain.CustomFieldDef{
+		Name:     dtoField.Name,
+		Label:    dtoField.Label,
+		Type:     dtoField.Type,
+		Required: dtoField.Required,
 	}
-
-	if len(dto.Options) > 0 {
-		schema.Options = make([]domain.CustomFieldOption, len(dto.Options))
-		for i, opt := range dto.Options {
-			schema.Options[i] = domain.CustomFieldOption{
-				Value: opt.Value,
-				Label: opt.Label,
-				Color: opt.Color,
-			}
+	if dtoField.DefaultValue != nil {
+		if defaultStr, ok := dtoField.DefaultValue.(string); ok {
+			field.Default = defaultStr
 		}
 	}
 
-	if dto.Validation != nil {
-		schema.Validation = &domain.CustomFieldValidation{
-			MinLength: dto.Validation.MinLength,
-			MaxLength: dto.Validation.MaxLength,
-			Min:       dto.Validation.Min,
-			Max:       dto.Validation.Max,
-			Pattern:   dto.Validation.Pattern,
+	// Map options - convert from structured DTO to simple strings
+	if len(dtoField.Options) > 0 {
+		field.Options = make([]string, len(dtoField.Options))
+		for i, opt := range dtoField.Options {
+			field.Options[i] = opt.Value
 		}
 	}
 
-	return schema
+	return field
 }
 
-func (uc *pipelineUseCase) mapCustomFieldSchemaDomainToDTO(schema *domain.CustomFieldSchema) *dto.CustomFieldSchemaDTO {
-	dto := &dto.CustomFieldSchemaDTO{
-		Name:         schema.Name,
-		Label:        schema.Label,
-		Type:         string(schema.Type),
-		Description:  schema.Description,
-		Required:     schema.Required,
-		DefaultValue: schema.DefaultValue,
-		DisplayOrder: schema.DisplayOrder,
-		IsActive:     schema.IsActive,
+func (uc *pipelineUseCase) mapCustomFieldSchemaDomainToDTO(field domain.CustomFieldDef) *dto.CustomFieldSchemaDTO {
+	result := &dto.CustomFieldSchemaDTO{
+		Name:         field.Name,
+		Label:        field.Label,
+		Type:         field.Type,
+		Required:     field.Required,
+		DefaultValue: field.Default,
+		IsActive:     true, // Domain doesn't have IsActive, default to true
 	}
 
-	if len(schema.Options) > 0 {
-		dto.Options = make([]dto.CustomFieldOptionDTO, len(schema.Options))
-		for i, opt := range schema.Options {
-			dto.Options[i] = dto.CustomFieldOptionDTO{
-				Value: opt.Value,
-				Label: opt.Label,
-				Color: opt.Color,
+	// Map options - convert from simple strings to structured DTO
+	if len(field.Options) > 0 {
+		result.Options = make([]dto.CustomFieldOptionDTO, len(field.Options))
+		for i, opt := range field.Options {
+			result.Options[i] = dto.CustomFieldOptionDTO{
+				Value: opt,
+				Label: opt, // Use value as label since domain only stores value
 			}
 		}
 	}
 
-	if schema.Validation != nil {
-		dto.Validation = &dto.CustomFieldValidation{
-			MinLength: schema.Validation.MinLength,
-			MaxLength: schema.Validation.MaxLength,
-			Min:       schema.Validation.Min,
-			Max:       schema.Validation.Max,
-			Pattern:   schema.Validation.Pattern,
-		}
-	}
-
-	return dto
+	return result
 }
 
 func (uc *pipelineUseCase) getPeriodKey(date time.Time, groupBy string) string {

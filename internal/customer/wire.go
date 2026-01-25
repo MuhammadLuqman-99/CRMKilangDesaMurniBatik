@@ -11,13 +11,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/application/ports"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/application/usecase"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/domain"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/infrastructure/cache"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/infrastructure/messaging"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/infrastructure/persistence/mongodb"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/interfaces/http"
+	"github.com/kilang-desa-murni/crm/internal/customer/application/ports"
+	"github.com/kilang-desa-murni/crm/internal/customer/application/usecase"
+	"github.com/kilang-desa-murni/crm/internal/customer/domain"
+	"github.com/kilang-desa-murni/crm/internal/customer/infrastructure/cache"
+	"github.com/kilang-desa-murni/crm/internal/customer/infrastructure/messaging"
+	"github.com/kilang-desa-murni/crm/internal/customer/infrastructure/persistence/mongodb"
+	"github.com/kilang-desa-murni/crm/internal/customer/interfaces/http"
 )
 
 // Config contains configuration for the Customer service.

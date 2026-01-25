@@ -8,11 +8,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/application"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/application/dto"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/application/mapper"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/application/ports"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/domain"
+	"github.com/kilang-desa-murni/crm/internal/customer/application"
+	"github.com/kilang-desa-murni/crm/internal/customer/application/dto"
+	"github.com/kilang-desa-murni/crm/internal/customer/application/mapper"
+	"github.com/kilang-desa-murni/crm/internal/customer/application/ports"
+	"github.com/kilang-desa-murni/crm/internal/customer/domain"
 )
 
 // UpdateCustomerUseCase handles customer updates.

@@ -6,10 +6,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"crm-kilang-desa-murni-batik/internal/sales/application"
-	"crm-kilang-desa-murni-batik/internal/sales/application/dto"
-	"crm-kilang-desa-murni-batik/internal/sales/application/ports"
-	"crm-kilang-desa-murni-batik/internal/sales/domain"
+	"github.com/kilang-desa-murni/crm/internal/sales/application"
+	"github.com/kilang-desa-murni/crm/internal/sales/application/dto"
+	"github.com/kilang-desa-murni/crm/internal/sales/application/ports"
+	"github.com/kilang-desa-murni/crm/internal/sales/domain"
 )
 
 // ============================================================================
@@ -122,23 +122,9 @@ func (uc *opportunityUseCase) Create(ctx context.Context, tenantID, userID uuid.
 		return nil, application.ErrPipelineInactive(pipelineID)
 	}
 
-	// Determine stage
-	var stage *domain.Stage
-	if req.StageID != nil {
-		stageID, _ := uuid.Parse(*req.StageID)
-		stage = pipeline.GetStageByID(stageID)
-		if stage == nil {
-			return nil, application.ErrPipelineStageNotFound(pipelineID, stageID)
-		}
-	} else {
-		stage = pipeline.GetFirstOpenStage()
-		if stage == nil {
-			return nil, application.NewAppError(application.ErrCodePipelineStageNotFound, "pipeline has no open stages")
-		}
-	}
-
-	// Parse owner ID
+	// Parse owner ID and get owner name
 	ownerID := userID
+	ownerName := ""
 	if req.OwnerID != nil {
 		parsedOwnerID, err := uuid.Parse(*req.OwnerID)
 		if err != nil {
@@ -153,11 +139,29 @@ func (uc *opportunityUseCase) Create(ctx context.Context, tenantID, userID uuid.
 		}
 		ownerID = parsedOwnerID
 	}
+	// Get owner name
+	if uc.userService != nil {
+		if user, err := uc.userService.GetUser(ctx, tenantID, ownerID); err == nil && user != nil {
+			ownerName = user.FullName
+		}
+	}
 
-	// Parse expected close date
-	expectedCloseDate, err := time.Parse("2006-01-02", req.ExpectedCloseDate)
-	if err != nil {
-		return nil, application.ErrValidation("invalid expected_close_date format")
+	// Parse customer ID and name (required for NewOpportunity)
+	var customerID uuid.UUID
+	customerName := ""
+	if req.CustomerID != nil {
+		customerID, _ = uuid.Parse(*req.CustomerID)
+		exists, err := uc.customerService.CustomerExists(ctx, tenantID, customerID)
+		if err != nil {
+			return nil, application.WrapError(application.ErrCodeCustomerServiceError, "failed to verify customer", err)
+		}
+		if !exists {
+			return nil, application.ErrCustomerNotFound(customerID)
+		}
+		// Get customer name
+		if customer, err := uc.customerService.GetCustomer(ctx, tenantID, customerID); err == nil && customer != nil {
+			customerName = customer.Name
+		}
 	}
 
 	// Create amount
@@ -166,17 +170,16 @@ func (uc *opportunityUseCase) Create(ctx context.Context, tenantID, userID uuid.
 		return nil, application.ErrValidation("invalid amount or currency")
 	}
 
-	// Create opportunity
-	opportunityID := uc.idGenerator.GenerateID()
+	// Create opportunity using domain factory
 	opportunity, err := domain.NewOpportunity(
-		opportunityID,
 		tenantID,
 		req.Name,
-		pipelineID,
-		stage.ID,
+		pipeline,
+		customerID,
+		customerName,
 		amount,
-		expectedCloseDate,
 		ownerID,
+		ownerName,
 		userID,
 	)
 	if err != nil {
@@ -186,29 +189,17 @@ func (uc *opportunityUseCase) Create(ctx context.Context, tenantID, userID uuid.
 	// Set probability
 	if req.Probability != nil {
 		opportunity.Probability = *req.Probability
-	} else {
-		opportunity.Probability = stage.Probability
 	}
 
 	// Set optional fields
 	if req.Description != nil {
-		opportunity.Description = req.Description
-	}
-	if req.CustomerID != nil {
-		customerID, _ := uuid.Parse(*req.CustomerID)
-		exists, err := uc.customerService.CustomerExists(ctx, tenantID, customerID)
-		if err != nil {
-			return nil, application.WrapError(application.ErrCodeCustomerServiceError, "failed to verify customer", err)
-		}
-		if !exists {
-			return nil, application.ErrCustomerNotFound(customerID)
-		}
-		opportunity.CustomerID = &customerID
+		opportunity.Description = *req.Description
 	}
 	if req.LeadID != nil {
 		leadID, _ := uuid.Parse(*req.LeadID)
 		opportunity.LeadID = &leadID
 	}
+	// Add primary contact if specified
 	if req.PrimaryContactID != nil {
 		contactID, _ := uuid.Parse(*req.PrimaryContactID)
 		exists, err := uc.customerService.ContactExists(ctx, tenantID, contactID)
@@ -218,13 +209,16 @@ func (uc *opportunityUseCase) Create(ctx context.Context, tenantID, userID uuid.
 		if !exists {
 			return nil, application.ErrContactNotFound(contactID)
 		}
-		opportunity.PrimaryContactID = &contactID
+		// Add as primary contact
+		opportunity.AddContact(domain.OpportunityContact{
+			ContactID:  contactID,
+			CustomerID: customerID,
+			Role:       "decision_maker",
+			IsPrimary:  true,
+		})
 	}
 	if req.Source != "" {
 		opportunity.Source = req.Source
-	}
-	if req.SourceDetails != nil {
-		opportunity.SourceDetails = req.SourceDetails
 	}
 	if req.CampaignID != nil {
 		campaignID, _ := uuid.Parse(*req.CampaignID)
@@ -237,15 +231,19 @@ func (uc *opportunityUseCase) Create(ctx context.Context, tenantID, userID uuid.
 		opportunity.CustomFields = req.CustomFields
 	}
 	if req.Notes != nil {
-		opportunity.Notes = req.Notes
+		opportunity.Notes = *req.Notes
 	}
 
 	// Add contacts
 	if len(req.Contacts) > 0 {
 		for _, contactReq := range req.Contacts {
 			contactID, _ := uuid.Parse(contactReq.ContactID)
-			role := domain.ContactRole(contactReq.Role)
-			opportunity.AddContact(contactID, role, contactReq.IsPrimary, userID)
+			opportunity.AddContact(domain.OpportunityContact{
+				ContactID:  contactID,
+				CustomerID: customerID,
+				Role:       contactReq.Role,
+				IsPrimary:  contactReq.IsPrimary,
+			})
 		}
 	}
 
@@ -254,36 +252,25 @@ func (uc *opportunityUseCase) Create(ctx context.Context, tenantID, userID uuid.
 		for _, productReq := range req.Products {
 			productID, _ := uuid.Parse(productReq.ProductID)
 			unitPrice, _ := domain.NewMoney(productReq.UnitPrice, productReq.Currency)
-			discountPct := 0
+			discount := float64(0)
 			if productReq.DiscountPercent != nil {
-				discountPct = *productReq.DiscountPercent
+				discount = float64(*productReq.DiscountPercent)
 			}
-			var discountAmt *domain.Money
-			if productReq.DiscountAmount != nil {
-				discountAmt, _ = domain.NewMoney(*productReq.DiscountAmount, productReq.Currency)
+			product := domain.OpportunityProduct{
+				ProductID:   productID,
+				ProductName: productReq.ProductName,
+				Quantity:    productReq.Quantity,
+				UnitPrice:   unitPrice,
+				Discount:    discount,
 			}
-			opportunity.AddProduct(productID, productReq.ProductName, productReq.Quantity, unitPrice, discountPct, discountAmt, productReq.Description)
+			if productReq.Description != nil {
+				product.Notes = *productReq.Description
+			}
+			opportunity.AddProduct(product)
 		}
 	}
 
-	// Add competitors
-	if len(req.Competitors) > 0 {
-		for _, compReq := range req.Competitors {
-			competitor := &domain.Competitor{
-				ID:          uc.idGenerator.GenerateID(),
-				Name:        compReq.Name,
-				Website:     compReq.Website,
-				Strengths:   compReq.Strengths,
-				Weaknesses:  compReq.Weaknesses,
-				ThreatLevel: domain.ThreatLevel(compReq.ThreatLevel),
-				Notes:       compReq.Notes,
-			}
-			opportunity.Competitors = append(opportunity.Competitors, competitor)
-		}
-	}
-
-	// Calculate weighted amount
-	opportunity.CalculateWeightedAmount()
+	// Note: Competitors list not supported in domain - use CloseInfo.CompetitorID/Name when losing
 
 	// Save opportunity
 	if err := uc.opportunityRepo.Create(ctx, opportunity); err != nil {
@@ -291,7 +278,7 @@ func (uc *opportunityUseCase) Create(ctx context.Context, tenantID, userID uuid.
 	}
 
 	// Publish events
-	for _, event := range opportunity.Events() {
+	for _, event := range opportunity.GetEvents() {
 		uc.publishEvent(ctx, event)
 	}
 	opportunity.ClearEvents()
@@ -342,7 +329,7 @@ func (uc *opportunityUseCase) Update(ctx context.Context, tenantID, opportunityI
 		opportunity.Name = *req.Name
 	}
 	if req.Description != nil {
-		opportunity.Description = req.Description
+		opportunity.Description = *req.Description
 	}
 	if req.Amount != nil && req.Currency != nil {
 		amount, _ := domain.NewMoney(*req.Amount, *req.Currency)
@@ -353,7 +340,7 @@ func (uc *opportunityUseCase) Update(ctx context.Context, tenantID, opportunityI
 	}
 	if req.ExpectedCloseDate != nil {
 		expectedCloseDate, _ := time.Parse("2006-01-02", *req.ExpectedCloseDate)
-		opportunity.ExpectedCloseDate = expectedCloseDate
+		opportunity.ExpectedCloseDate = &expectedCloseDate
 	}
 	if req.CustomerID != nil {
 		customerID, _ := uuid.Parse(*req.CustomerID)
@@ -361,21 +348,14 @@ func (uc *opportunityUseCase) Update(ctx context.Context, tenantID, opportunityI
 		if !exists {
 			return nil, application.ErrCustomerNotFound(customerID)
 		}
-		opportunity.CustomerID = &customerID
-	}
-	if req.PrimaryContactID != nil {
-		contactID, _ := uuid.Parse(*req.PrimaryContactID)
-		exists, _ := uc.customerService.ContactExists(ctx, tenantID, contactID)
-		if !exists {
-			return nil, application.ErrContactNotFound(contactID)
+		opportunity.CustomerID = customerID
+		// Get customer name
+		if customer, err := uc.customerService.GetCustomer(ctx, tenantID, customerID); err == nil && customer != nil {
+			opportunity.CustomerName = customer.Name
 		}
-		opportunity.PrimaryContactID = &contactID
 	}
 	if req.Source != nil {
 		opportunity.Source = *req.Source
-	}
-	if req.SourceDetails != nil {
-		opportunity.SourceDetails = req.SourceDetails
 	}
 	if req.Tags != nil {
 		opportunity.Tags = req.Tags
@@ -384,19 +364,15 @@ func (uc *opportunityUseCase) Update(ctx context.Context, tenantID, opportunityI
 		opportunity.CustomFields = req.CustomFields
 	}
 	if req.Notes != nil {
-		opportunity.Notes = req.Notes
+		opportunity.Notes = *req.Notes
 	}
-
-	// Recalculate weighted amount
-	opportunity.CalculateWeightedAmount()
 
 	// Update metadata
 	opportunity.UpdatedAt = time.Now()
-	opportunity.UpdatedBy = userID
 	opportunity.Version++
 
 	// Add update event
-	opportunity.AddEvent(domain.NewOpportunityUpdatedEvent(opportunity, userID))
+	opportunity.AddEvent(domain.NewOpportunityUpdatedEvent(opportunity))
 
 	// Save changes
 	if err := uc.opportunityRepo.Update(ctx, opportunity); err != nil {
@@ -404,7 +380,7 @@ func (uc *opportunityUseCase) Update(ctx context.Context, tenantID, opportunityI
 	}
 
 	// Publish events
-	for _, event := range opportunity.Events() {
+	for _, event := range opportunity.GetEvents() {
 		uc.publishEvent(ctx, event)
 	}
 	opportunity.ClearEvents()
@@ -427,9 +403,9 @@ func (uc *opportunityUseCase) Delete(ctx context.Context, tenantID, opportunityI
 		return application.ErrOpportunityNotFound(opportunityID)
 	}
 
-	// Check if opportunity can be deleted (no deal created)
-	if opportunity.DealID != nil {
-		return application.NewAppError(application.ErrCodeConflict, "cannot delete opportunity with associated deal")
+	// Check if opportunity is closed
+	if opportunity.Status.IsClosed() {
+		return application.NewAppError(application.ErrCodeConflict, "cannot delete closed opportunity")
 	}
 
 	// Delete opportunity
@@ -438,7 +414,7 @@ func (uc *opportunityUseCase) Delete(ctx context.Context, tenantID, opportunityI
 	}
 
 	// Publish delete event
-	event := domain.NewOpportunityDeletedEvent(opportunity, userID)
+	event := domain.NewOpportunityDeletedEvent(opportunity)
 	uc.publishEvent(ctx, event)
 
 	// Remove from search index
@@ -531,7 +507,7 @@ func (uc *opportunityUseCase) MoveStage(ctx context.Context, tenantID, opportuni
 	}
 
 	// Get stage
-	stage := pipeline.GetStageByID(stageID)
+	stage := pipeline.GetStage(stageID)
 	if stage == nil {
 		return nil, application.ErrPipelineStageNotFound(pipeline.ID, stageID)
 	}
@@ -540,7 +516,11 @@ func (uc *opportunityUseCase) MoveStage(ctx context.Context, tenantID, opportuni
 	}
 
 	// Move stage
-	if err := opportunity.MoveToStage(stage, userID); err != nil {
+	notes := ""
+	if req.Notes != nil {
+		notes = *req.Notes
+	}
+	if err := opportunity.MoveToStage(stage, userID, notes); err != nil {
 		return nil, application.WrapError(application.ErrCodeOpportunityInvalidTransition, err.Error(), err)
 	}
 
@@ -549,8 +529,7 @@ func (uc *opportunityUseCase) MoveStage(ctx context.Context, tenantID, opportuni
 		opportunity.Probability = *req.Probability
 	}
 
-	// Recalculate weighted amount
-	opportunity.CalculateWeightedAmount()
+	// Note: weighted amount is calculated automatically in domain
 
 	// Save changes
 	if err := uc.opportunityRepo.Update(ctx, opportunity); err != nil {
@@ -558,7 +537,7 @@ func (uc *opportunityUseCase) MoveStage(ctx context.Context, tenantID, opportuni
 	}
 
 	// Publish events
-	for _, event := range opportunity.Events() {
+	for _, event := range opportunity.GetEvents() {
 		uc.publishEvent(ctx, event)
 	}
 	opportunity.ClearEvents()
@@ -596,7 +575,7 @@ func (uc *opportunityUseCase) Win(ctx context.Context, tenantID, opportunityID, 
 	var wonStage *domain.Stage
 	if req.WonStageID != nil {
 		stageID, _ := uuid.Parse(*req.WonStageID)
-		wonStage = pipeline.GetStageByID(stageID)
+		wonStage = pipeline.GetStage(stageID)
 	} else {
 		// Get first won stage
 		for _, s := range pipeline.Stages {
@@ -624,7 +603,6 @@ func (uc *opportunityUseCase) Win(ctx context.Context, tenantID, opportunityID, 
 	if req.ActualAmount != nil {
 		actualAmount, _ := domain.NewMoney(*req.ActualAmount, opportunity.Amount.Currency)
 		opportunity.Amount = actualAmount
-		opportunity.CalculateWeightedAmount()
 	}
 
 	// Update actual close date if provided
@@ -645,16 +623,13 @@ func (uc *opportunityUseCase) Win(ctx context.Context, tenantID, opportunityID, 
 		if err != nil {
 			// Log error but don't fail
 		} else {
-			// Update opportunity with deal ID
-			opportunity.DealID = &deal.ID
-			uc.opportunityRepo.Update(ctx, opportunity)
 			s := deal.ID.String()
 			dealID = &s
 		}
 	}
 
 	// Publish events
-	for _, event := range opportunity.Events() {
+	for _, event := range opportunity.GetEvents() {
 		uc.publishEvent(ctx, event)
 	}
 	opportunity.ClearEvents()
@@ -700,7 +675,7 @@ func (uc *opportunityUseCase) Lose(ctx context.Context, tenantID, opportunityID,
 	var lostStage *domain.Stage
 	if req.LostStageID != nil {
 		stageID, _ := uuid.Parse(*req.LostStageID)
-		lostStage = pipeline.GetStageByID(stageID)
+		lostStage = pipeline.GetStage(stageID)
 	} else {
 		// Get first lost stage
 		for _, s := range pipeline.Stages {
@@ -742,7 +717,7 @@ func (uc *opportunityUseCase) Lose(ctx context.Context, tenantID, opportunityID,
 	}
 
 	// Publish events
-	for _, event := range opportunity.Events() {
+	for _, event := range opportunity.GetEvents() {
 		uc.publishEvent(ctx, event)
 	}
 	opportunity.ClearEvents()
@@ -782,7 +757,7 @@ func (uc *opportunityUseCase) Reopen(ctx context.Context, tenantID, opportunityI
 	}
 
 	// Get stage
-	stage := pipeline.GetStageByID(stageID)
+	stage := pipeline.GetStage(stageID)
 	if stage == nil {
 		return nil, application.ErrPipelineStageNotFound(pipeline.ID, stageID)
 	}
@@ -794,17 +769,23 @@ func (uc *opportunityUseCase) Reopen(ctx context.Context, tenantID, opportunityI
 	}
 
 	// Reopen the opportunity
-	if err := opportunity.Reopen(stage, expectedCloseDate, userID); err != nil {
+	notes := ""
+	if req.Notes != nil {
+		notes = *req.Notes
+	}
+	if err := opportunity.Reopen(pipeline, userID, notes); err != nil {
 		return nil, application.WrapError(application.ErrCodeOpportunityInvalidTransition, err.Error(), err)
 	}
+
+	// Set expected close date
+	opportunity.ExpectedCloseDate = &expectedCloseDate
 
 	// Update probability if provided
 	if req.Probability != nil {
 		opportunity.Probability = *req.Probability
 	}
 
-	// Recalculate weighted amount
-	opportunity.CalculateWeightedAmount()
+	// Note: weighted amount is calculated automatically in domain
 
 	// Save changes
 	if err := uc.opportunityRepo.Update(ctx, opportunity); err != nil {
@@ -812,7 +793,7 @@ func (uc *opportunityUseCase) Reopen(ctx context.Context, tenantID, opportunityI
 	}
 
 	// Publish events
-	for _, event := range opportunity.Events() {
+	for _, event := range opportunity.GetEvents() {
 		uc.publishEvent(ctx, event)
 	}
 	opportunity.ClearEvents()
@@ -862,23 +843,26 @@ func (uc *opportunityUseCase) AddProduct(ctx context.Context, tenantID, opportun
 	}
 
 	// Prepare discount
-	discountPct := 0
+	discount := float64(0)
 	if req.DiscountPercent != nil {
-		discountPct = *req.DiscountPercent
-	}
-	var discountAmt *domain.Money
-	if req.DiscountAmount != nil {
-		discountAmt, _ = domain.NewMoney(*req.DiscountAmount, req.Currency)
+		discount = float64(*req.DiscountPercent)
 	}
 
-	// Add product
-	if err := opportunity.AddProduct(productID, req.ProductName, req.Quantity, unitPrice, discountPct, discountAmt, req.Description); err != nil {
-		return nil, application.WrapError(application.ErrCodeOpportunityProductDuplicate, err.Error(), err)
+	// Add product using OpportunityProduct struct
+	product := domain.OpportunityProduct{
+		ProductID:   productID,
+		ProductName: req.ProductName,
+		Quantity:    req.Quantity,
+		UnitPrice:   unitPrice,
+		Discount:    discount,
 	}
+	if req.Description != nil {
+		product.Notes = *req.Description
+	}
+	opportunity.AddProduct(product)
 
 	// Update metadata
 	opportunity.UpdatedAt = time.Now()
-	opportunity.UpdatedBy = userID
 	opportunity.Version++
 
 	// Save changes
@@ -903,41 +887,42 @@ func (uc *opportunityUseCase) UpdateProduct(ctx context.Context, tenantID, oppor
 		return nil, application.ErrOpportunityClosed(opportunityID)
 	}
 
-	// Find and update product
-	found := false
-	for _, product := range opportunity.Products {
-		if product.ProductID == productID {
-			found = true
-			if req.Quantity != nil {
-				product.Quantity = *req.Quantity
-			}
-			if req.UnitPrice != nil {
-				product.UnitPrice.Amount = *req.UnitPrice
-			}
-			if req.DiscountPercent != nil {
-				product.DiscountPercent = *req.DiscountPercent
-			}
-			if req.DiscountAmount != nil {
-				product.DiscountAmount.Amount = *req.DiscountAmount
-			}
-			if req.Description != nil {
-				product.Description = req.Description
-			}
-			product.CalculateTotal()
+	// Find the product first
+	var existingProduct *domain.OpportunityProduct
+	for i := range opportunity.Products {
+		if opportunity.Products[i].ProductID == productID {
+			existingProduct = &opportunity.Products[i]
 			break
 		}
 	}
 
-	if !found {
+	if existingProduct == nil {
 		return nil, application.ErrOpportunityProductNotFound(opportunityID, productID)
 	}
 
-	// Recalculate opportunity total
-	opportunity.RecalculateAmount()
+	// Prepare update values
+	quantity := existingProduct.Quantity
+	unitPrice := existingProduct.UnitPrice
+	discount := existingProduct.Discount
+	tax := existingProduct.Tax
+
+	if req.Quantity != nil {
+		quantity = *req.Quantity
+	}
+	if req.UnitPrice != nil {
+		unitPrice, _ = domain.NewMoney(*req.UnitPrice, opportunity.Amount.Currency)
+	}
+	if req.DiscountPercent != nil {
+		discount = float64(*req.DiscountPercent)
+	}
+
+	// Use domain's UpdateProduct method
+	if err := opportunity.UpdateProduct(existingProduct.ID, quantity, unitPrice, discount, tax); err != nil {
+		return nil, application.WrapError(application.ErrCodeInternal, "failed to update product", err)
+	}
 
 	// Update metadata
 	opportunity.UpdatedAt = time.Now()
-	opportunity.UpdatedBy = userID
 	opportunity.Version++
 
 	// Save changes
@@ -962,14 +947,21 @@ func (uc *opportunityUseCase) RemoveProduct(ctx context.Context, tenantID, oppor
 		return nil, application.ErrOpportunityClosed(opportunityID)
 	}
 
-	// Remove product
-	if err := opportunity.RemoveProduct(productID); err != nil {
+	// Check if product exists and remove
+	found := false
+	for _, p := range opportunity.Products {
+		if p.ID == productID || p.ProductID == productID {
+			found = true
+			break
+		}
+	}
+	if !found {
 		return nil, application.ErrOpportunityProductNotFound(opportunityID, productID)
 	}
+	opportunity.RemoveProduct(productID)
 
 	// Update metadata
 	opportunity.UpdatedAt = time.Now()
-	opportunity.UpdatedBy = userID
 	opportunity.Version++
 
 	// Save changes
@@ -1014,14 +1006,15 @@ func (uc *opportunityUseCase) AddContact(ctx context.Context, tenantID, opportun
 	}
 
 	// Add contact
-	role := domain.ContactRole(req.Role)
-	if err := opportunity.AddContact(contactID, role, req.IsPrimary, userID); err != nil {
-		return nil, application.ErrOpportunityContactDuplicate(opportunityID, contactID)
-	}
+	opportunity.AddContact(domain.OpportunityContact{
+		ContactID:  contactID,
+		CustomerID: opportunity.CustomerID,
+		Role:       req.Role,
+		IsPrimary:  req.IsPrimary,
+	})
 
 	// Update metadata
 	opportunity.UpdatedAt = time.Now()
-	opportunity.UpdatedBy = userID
 	opportunity.Version++
 
 	// Save changes
@@ -1047,35 +1040,33 @@ func (uc *opportunityUseCase) UpdateContact(ctx context.Context, tenantID, oppor
 	}
 
 	// Find and update contact
-	found := false
-	for _, contact := range opportunity.Contacts {
+	contactIdx := -1
+	for i, contact := range opportunity.Contacts {
 		if contact.ContactID == contactID {
-			found = true
-			if req.Role != nil {
-				contact.Role = domain.ContactRole(*req.Role)
-			}
-			if req.IsPrimary != nil && *req.IsPrimary {
-				// Remove primary from others
-				for _, c := range opportunity.Contacts {
-					c.IsPrimary = false
-				}
-				contact.IsPrimary = true
-				opportunity.PrimaryContactID = &contactID
-			}
-			if req.Notes != nil {
-				contact.Notes = req.Notes
-			}
+			contactIdx = i
 			break
 		}
 	}
 
-	if !found {
+	if contactIdx == -1 {
 		return nil, application.ErrOpportunityContactNotFound(opportunityID, contactID)
+	}
+
+	// Update role
+	if req.Role != nil {
+		opportunity.Contacts[contactIdx].Role = *req.Role
+	}
+	// Handle primary contact
+	if req.IsPrimary != nil && *req.IsPrimary {
+		// Remove primary from others first
+		for i := range opportunity.Contacts {
+			opportunity.Contacts[i].IsPrimary = false
+		}
+		opportunity.Contacts[contactIdx].IsPrimary = true
 	}
 
 	// Update metadata
 	opportunity.UpdatedAt = time.Now()
-	opportunity.UpdatedBy = userID
 	opportunity.Version++
 
 	// Save changes
@@ -1100,14 +1091,21 @@ func (uc *opportunityUseCase) RemoveContact(ctx context.Context, tenantID, oppor
 		return nil, application.ErrOpportunityClosed(opportunityID)
 	}
 
-	// Remove contact
-	if err := opportunity.RemoveContact(contactID); err != nil {
+	// Check if contact exists and remove
+	contactFound := false
+	for _, c := range opportunity.Contacts {
+		if c.ContactID == contactID {
+			contactFound = true
+			break
+		}
+	}
+	if !contactFound {
 		return nil, application.ErrOpportunityContactNotFound(opportunityID, contactID)
 	}
+	opportunity.RemoveContact(contactID)
 
 	// Update metadata
 	opportunity.UpdatedAt = time.Now()
-	opportunity.UpdatedBy = userID
 	opportunity.Version++
 
 	// Save changes
@@ -1136,33 +1134,9 @@ func (uc *opportunityUseCase) AddCompetitor(ctx context.Context, tenantID, oppor
 		return nil, application.ErrOpportunityClosed(opportunityID)
 	}
 
-	// Create competitor
-	competitor := &domain.Competitor{
-		ID:          uc.idGenerator.GenerateID(),
-		Name:        req.Name,
-		Website:     req.Website,
-		Strengths:   req.Strengths,
-		Weaknesses:  req.Weaknesses,
-		ThreatLevel: domain.ThreatLevel(req.ThreatLevel),
-		Notes:       req.Notes,
-	}
-
-	opportunity.Competitors = append(opportunity.Competitors, competitor)
-
-	// Update metadata
-	opportunity.UpdatedAt = time.Now()
-	opportunity.UpdatedBy = userID
-	opportunity.Version++
-
-	// Save changes
-	if err := uc.opportunityRepo.Update(ctx, opportunity); err != nil {
-		return nil, application.WrapError(application.ErrCodeInternal, "failed to update opportunity", err)
-	}
-
-	// Get pipeline
-	pipeline, _ := uc.pipelineRepo.GetByID(ctx, tenantID, opportunity.PipelineID)
-
-	return uc.mapOpportunityToResponse(ctx, opportunity, pipeline), nil
+	// Note: Competitor tracking is not supported in the current domain model.
+	// Competitor information is only stored when the opportunity is lost (CloseInfo).
+	return nil, application.NewAppError(application.ErrCodeValidation, "competitor tracking is not supported - use loss reason instead")
 }
 
 // ============================================================================
@@ -1182,7 +1156,7 @@ func (uc *opportunityUseCase) Assign(ctx context.Context, tenantID, opportunityI
 		return nil, application.ErrValidation("invalid owner_id format")
 	}
 
-	// Verify owner exists
+	// Verify owner exists and get name
 	exists, err := uc.userService.UserExists(ctx, tenantID, ownerID)
 	if err != nil {
 		return nil, application.WrapError(application.ErrCodeUserServiceError, "failed to verify owner", err)
@@ -1191,10 +1165,14 @@ func (uc *opportunityUseCase) Assign(ctx context.Context, tenantID, opportunityI
 		return nil, application.ErrUserNotFound(ownerID)
 	}
 
-	// Assign
-	if err := opportunity.Assign(ownerID, userID); err != nil {
-		return nil, application.WrapError(application.ErrCodeOpportunityAssignmentFailed, err.Error(), err)
+	// Get owner name
+	ownerName := ""
+	if user, err := uc.userService.GetUser(ctx, tenantID, ownerID); err == nil && user != nil {
+		ownerName = user.FullName
 	}
+
+	// Assign using domain method
+	opportunity.AssignOwner(ownerID, ownerName)
 
 	// Save changes
 	if err := uc.opportunityRepo.Update(ctx, opportunity); err != nil {
@@ -1202,7 +1180,7 @@ func (uc *opportunityUseCase) Assign(ctx context.Context, tenantID, opportunityI
 	}
 
 	// Publish events
-	for _, event := range opportunity.Events() {
+	for _, event := range opportunity.GetEvents() {
 		uc.publishEvent(ctx, event)
 	}
 	opportunity.ClearEvents()
@@ -1431,22 +1409,19 @@ func (uc *opportunityUseCase) createDealFromOpportunity(ctx context.Context, opp
 
 	// Set additional details from request
 	if req.PaymentTerms != nil {
-		deal.PaymentTerms = *req.PaymentTerms
-	}
-	if req.ContractTerms != nil {
-		deal.ContractTerms = req.ContractTerms
+		deal.PaymentTerm = domain.PaymentTerm(*req.PaymentTerms)
 	}
 	if req.DealOwnerID != nil {
 		ownerID, _ := uuid.Parse(*req.DealOwnerID)
 		deal.OwnerID = ownerID
 	}
 
-	// Generate deal number
-	dealNumber, err := uc.idGenerator.GenerateDealNumber(ctx, opportunity.TenantID)
+	// Generate deal code
+	dealCode, err := uc.idGenerator.GenerateDealNumber(ctx, opportunity.TenantID)
 	if err != nil {
-		dealNumber = deal.ID.String()[:8]
+		dealCode = "DL-" + deal.ID.String()[:8]
 	}
-	deal.DealNumber = dealNumber
+	deal.Code = dealCode
 
 	// Save deal
 	if err := uc.dealRepo.Create(ctx, deal); err != nil {
@@ -1454,7 +1429,7 @@ func (uc *opportunityUseCase) createDealFromOpportunity(ctx context.Context, opp
 	}
 
 	// Publish events
-	for _, event := range deal.Events() {
+	for _, event := range deal.GetEvents() {
 		uc.publishEvent(ctx, event)
 	}
 	deal.ClearEvents()
@@ -1464,10 +1439,10 @@ func (uc *opportunityUseCase) createDealFromOpportunity(ctx context.Context, opp
 
 func (uc *opportunityUseCase) mapOpportunityToResponse(ctx context.Context, opportunity *domain.Opportunity, pipeline *domain.Pipeline) *dto.OpportunityResponse {
 	resp := &dto.OpportunityResponse{
-		ID:       opportunity.ID.String(),
-		TenantID: opportunity.TenantID.String(),
-		Name:     opportunity.Name,
-		Status:   string(opportunity.Status),
+		ID:         opportunity.ID.String(),
+		TenantID:   opportunity.TenantID.String(),
+		Name:       opportunity.Name,
+		Status:     string(opportunity.Status),
 		PipelineID: opportunity.PipelineID.String(),
 		StageID:    opportunity.StageID.String(),
 		Amount: dto.MoneyDTO{
@@ -1480,17 +1455,20 @@ func (uc *opportunityUseCase) mapOpportunityToResponse(ctx context.Context, oppo
 			Currency: opportunity.WeightedAmount.Currency,
 			Display:  opportunity.WeightedAmount.Format(),
 		},
-		Probability:       opportunity.Probability,
-		ExpectedCloseDate: opportunity.ExpectedCloseDate,
-		Source:            opportunity.Source,
-		OwnerID:           opportunity.OwnerID.String(),
-		Tags:              opportunity.Tags,
-		CustomFields:      opportunity.CustomFields,
-		CreatedAt:         opportunity.CreatedAt,
-		UpdatedAt:         opportunity.UpdatedAt,
-		CreatedBy:         opportunity.CreatedBy.String(),
-		UpdatedBy:         opportunity.UpdatedBy.String(),
-		Version:           opportunity.Version,
+		Probability:  opportunity.Probability,
+		Source:       opportunity.Source,
+		OwnerID:      opportunity.OwnerID.String(),
+		Tags:         opportunity.Tags,
+		CustomFields: opportunity.CustomFields,
+		CreatedAt:    opportunity.CreatedAt,
+		UpdatedAt:    opportunity.UpdatedAt,
+		CreatedBy:    opportunity.CreatedBy.String(),
+		Version:      opportunity.Version,
+	}
+
+	// ExpectedCloseDate is *time.Time in domain, time.Time in DTO
+	if opportunity.ExpectedCloseDate != nil {
+		resp.ExpectedCloseDate = *opportunity.ExpectedCloseDate
 	}
 
 	// Map pipeline info
@@ -1500,7 +1478,7 @@ func (uc *opportunityUseCase) mapOpportunityToResponse(ctx context.Context, oppo
 			Name:      pipeline.Name,
 			IsDefault: pipeline.IsDefault,
 		}
-		if stage := pipeline.GetStageByID(opportunity.StageID); stage != nil {
+		if stage := pipeline.GetStage(opportunity.StageID); stage != nil {
 			resp.Stage = &dto.StageBriefDTO{
 				ID:          stage.ID.String(),
 				Name:        stage.Name,
@@ -1512,19 +1490,21 @@ func (uc *opportunityUseCase) mapOpportunityToResponse(ctx context.Context, oppo
 		}
 	}
 
-	// Map optional fields
-	if opportunity.Description != nil {
-		resp.Description = opportunity.Description
+	// Map optional fields - Description is string
+	if opportunity.Description != "" {
+		desc := opportunity.Description
+		resp.Description = &desc
 	}
 	if opportunity.ActualCloseDate != nil {
 		resp.ActualCloseDate = opportunity.ActualCloseDate
 	}
-	if opportunity.CustomerID != nil {
+	// CustomerID is uuid.UUID, not *uuid.UUID
+	if opportunity.CustomerID != uuid.Nil {
 		s := opportunity.CustomerID.String()
 		resp.CustomerID = &s
 		// Fetch customer details if needed
 		if uc.customerService != nil {
-			if customer, err := uc.customerService.GetCustomer(ctx, opportunity.TenantID, *opportunity.CustomerID); err == nil {
+			if customer, err := uc.customerService.GetCustomer(ctx, opportunity.TenantID, opportunity.CustomerID); err == nil {
 				resp.Customer = &dto.CustomerBriefDTO{
 					ID:     customer.ID.String(),
 					Name:   customer.Name,
@@ -1539,131 +1519,113 @@ func (uc *opportunityUseCase) mapOpportunityToResponse(ctx context.Context, oppo
 		s := opportunity.LeadID.String()
 		resp.LeadID = &s
 	}
-	if opportunity.PrimaryContactID != nil {
-		s := opportunity.PrimaryContactID.String()
-		resp.PrimaryContactID = &s
-	}
-	if opportunity.SourceDetails != nil {
-		resp.SourceDetails = opportunity.SourceDetails
+	// Find primary contact from Contacts array
+	for _, c := range opportunity.Contacts {
+		if c.IsPrimary {
+			s := c.ContactID.String()
+			resp.PrimaryContactID = &s
+			break
+		}
 	}
 	if opportunity.CampaignID != nil {
 		s := opportunity.CampaignID.String()
 		resp.CampaignID = &s
 	}
-	if opportunity.Notes != nil {
-		resp.Notes = opportunity.Notes
+	// Notes is string
+	if opportunity.Notes != "" {
+		notes := opportunity.Notes
+		resp.Notes = &notes
 	}
 
-	// Map win/loss info
-	if opportunity.WonAt != nil {
-		resp.WonAt = opportunity.WonAt
-	}
-	if opportunity.WonBy != nil {
-		s := opportunity.WonBy.String()
-		resp.WonBy = &s
-	}
-	if opportunity.WonReason != nil {
-		resp.WonReason = opportunity.WonReason
-	}
-	if opportunity.WonNotes != nil {
-		resp.WonNotes = opportunity.WonNotes
-	}
-	if opportunity.LostAt != nil {
-		resp.LostAt = opportunity.LostAt
-	}
-	if opportunity.LostBy != nil {
-		s := opportunity.LostBy.String()
-		resp.LostBy = &s
-	}
-	if opportunity.LostReason != nil {
-		resp.LostReason = opportunity.LostReason
-	}
-	if opportunity.LostNotes != nil {
-		resp.LostNotes = opportunity.LostNotes
-	}
-	if opportunity.LostToCompetitorID != nil {
-		s := opportunity.LostToCompetitorID.String()
-		resp.CompetitorID = &s
-	}
-	if opportunity.LostToCompetitorName != "" {
-		resp.CompetitorName = &opportunity.LostToCompetitorName
-	}
-
-	// Map deal ID
-	if opportunity.DealID != nil {
-		s := opportunity.DealID.String()
-		resp.DealID = &s
+	// Map win/loss info from CloseInfo
+	if opportunity.CloseInfo != nil {
+		closeInfo := opportunity.CloseInfo
+		resp.ActualCloseDate = &closeInfo.ClosedAt
+		closedByStr := closeInfo.ClosedBy.String()
+		// Use opportunity.Status to determine win/loss (CloseInfo doesn't have Won field)
+		if opportunity.Status == domain.OpportunityStatusWon {
+			resp.WonAt = &closeInfo.ClosedAt
+			resp.WonBy = &closedByStr
+			if closeInfo.Reason != "" {
+				resp.WonReason = &closeInfo.Reason
+			}
+			if closeInfo.Notes != "" {
+				resp.WonNotes = &closeInfo.Notes
+			}
+		} else {
+			resp.LostAt = &closeInfo.ClosedAt
+			resp.LostBy = &closedByStr
+			if closeInfo.Reason != "" {
+				resp.LostReason = &closeInfo.Reason
+			}
+			if closeInfo.Notes != "" {
+				resp.LostNotes = &closeInfo.Notes
+			}
+			if closeInfo.CompetitorID != nil {
+				s := closeInfo.CompetitorID.String()
+				resp.CompetitorID = &s
+			}
+			if closeInfo.CompetitorName != "" {
+				resp.CompetitorName = &closeInfo.CompetitorName
+			}
+		}
 	}
 
-	// Map products
+	// Map products - use domain fields
 	resp.Products = make([]*dto.OpportunityProductResponseDTO, len(opportunity.Products))
 	for i, product := range opportunity.Products {
 		resp.Products[i] = &dto.OpportunityProductResponseDTO{
-			ID:          product.ID.String(),
-			ProductID:   product.ProductID.String(),
-			ProductName: product.ProductName,
-			Quantity:    product.Quantity,
+			ID:              product.ID.String(),
+			ProductID:       product.ProductID.String(),
+			ProductName:     product.ProductName,
+			Quantity:        product.Quantity,
 			UnitPrice: dto.MoneyDTO{
 				Amount:   product.UnitPrice.Amount,
 				Currency: product.UnitPrice.Currency,
 			},
-			DiscountPercent: product.DiscountPercent,
-			DiscountAmount: dto.MoneyDTO{
-				Amount:   product.DiscountAmount.Amount,
-				Currency: product.DiscountAmount.Currency,
-			},
+			DiscountPercent: int(product.Discount),
 			TotalPrice: dto.MoneyDTO{
 				Amount:   product.TotalPrice.Amount,
 				Currency: product.TotalPrice.Currency,
 			},
-			Description: product.Description,
+		}
+		if product.Notes != "" {
+			resp.Products[i].Description = &product.Notes
 		}
 	}
 	resp.ProductCount = len(opportunity.Products)
 
-	// Map contacts
+	// Map contacts - domain has simpler OpportunityContact
 	resp.Contacts = make([]*dto.OpportunityContactResponseDTO, len(opportunity.Contacts))
 	for i, contact := range opportunity.Contacts {
 		resp.Contacts[i] = &dto.OpportunityContactResponseDTO{
 			ContactID: contact.ContactID.String(),
-			Role:      string(contact.Role),
+			Role:      contact.Role,
 			IsPrimary: contact.IsPrimary,
-			Notes:     contact.Notes,
-			AddedAt:   contact.AddedAt,
 		}
 	}
 
-	// Map competitors
-	resp.Competitors = make([]*dto.CompetitorDTO, len(opportunity.Competitors))
-	for i, comp := range opportunity.Competitors {
-		resp.Competitors[i] = &dto.CompetitorDTO{
-			ID:          comp.ID.String(),
-			Name:        comp.Name,
-			Website:     comp.Website,
-			Strengths:   comp.Strengths,
-			Weaknesses:  comp.Weaknesses,
-			ThreatLevel: string(comp.ThreatLevel),
-			Notes:       comp.Notes,
-		}
-	}
+	// No Competitors in domain - skip mapping
 
 	// Map stage history
 	resp.StageHistory = make([]*dto.StageHistoryDTO, len(opportunity.StageHistory))
 	for i, history := range opportunity.StageHistory {
-		stageName := ""
-		if pipeline != nil {
-			if stage := pipeline.GetStageByID(history.StageID); stage != nil {
+		stageName := history.StageName
+		if stageName == "" && pipeline != nil {
+			if stage := pipeline.GetStage(history.StageID); stage != nil {
 				stageName = stage.Name
 			}
 		}
-		resp.StageHistory[i] = &dto.StageHistoryDTO{
+		historyDTO := &dto.StageHistoryDTO{
 			StageID:   history.StageID.String(),
 			StageName: stageName,
 			EnteredAt: history.EnteredAt,
 			ExitedAt:  history.ExitedAt,
-			ChangedBy: history.ChangedBy.String(),
-			Notes:     history.Notes,
 		}
+		if history.Notes != "" {
+			historyDTO.Notes = &history.Notes
+		}
+		resp.StageHistory[i] = historyDTO
 	}
 
 	// Calculate days
@@ -1691,17 +1653,18 @@ func (uc *opportunityUseCase) mapOpportunityToResponse(ctx context.Context, oppo
 func (uc *opportunityUseCase) mapOpportunityToBriefResponse(ctx context.Context, opportunity *domain.Opportunity, pipeline *domain.Pipeline) *dto.OpportunityBriefResponse {
 	stageName := ""
 	if pipeline != nil {
-		if stage := pipeline.GetStageByID(opportunity.StageID); stage != nil {
+		if stage := pipeline.GetStage(opportunity.StageID); stage != nil {
 			stageName = stage.Name
 		}
 	}
 
 	var customerID, customerName *string
-	if opportunity.CustomerID != nil {
+	// CustomerID is uuid.UUID, not *uuid.UUID
+	if opportunity.CustomerID != uuid.Nil {
 		s := opportunity.CustomerID.String()
 		customerID = &s
 		if uc.customerService != nil {
-			if customer, err := uc.customerService.GetCustomer(ctx, opportunity.TenantID, *opportunity.CustomerID); err == nil {
+			if customer, err := uc.customerService.GetCustomer(ctx, opportunity.TenantID, opportunity.CustomerID); err == nil {
 				customerName = &customer.Name
 			}
 		}
@@ -1714,7 +1677,7 @@ func (uc *opportunityUseCase) mapOpportunityToBriefResponse(ctx context.Context,
 		}
 	}
 
-	return &dto.OpportunityBriefResponse{
+	resp := &dto.OpportunityBriefResponse{
 		ID:     opportunity.ID.String(),
 		Name:   opportunity.Name,
 		Status: string(opportunity.Status),
@@ -1728,17 +1691,23 @@ func (uc *opportunityUseCase) mapOpportunityToBriefResponse(ctx context.Context,
 			Currency: opportunity.WeightedAmount.Currency,
 			Display:  opportunity.WeightedAmount.Format(),
 		},
-		Probability:       opportunity.Probability,
-		StageID:           opportunity.StageID.String(),
-		StageName:         stageName,
-		ExpectedCloseDate: opportunity.ExpectedCloseDate,
-		CustomerID:        customerID,
-		CustomerName:      customerName,
-		OwnerID:           opportunity.OwnerID.String(),
-		OwnerName:         ownerName,
-		DaysOpen:          int(time.Since(opportunity.CreatedAt).Hours() / 24),
-		CreatedAt:         opportunity.CreatedAt,
+		Probability: opportunity.Probability,
+		StageID:     opportunity.StageID.String(),
+		StageName:   stageName,
+		CustomerID:  customerID,
+		CustomerName: customerName,
+		OwnerID:     opportunity.OwnerID.String(),
+		OwnerName:   ownerName,
+		DaysOpen:    int(time.Since(opportunity.CreatedAt).Hours() / 24),
+		CreatedAt:   opportunity.CreatedAt,
 	}
+
+	// ExpectedCloseDate is *time.Time in domain, time.Time in DTO
+	if opportunity.ExpectedCloseDate != nil {
+		resp.ExpectedCloseDate = *opportunity.ExpectedCloseDate
+	}
+
+	return resp
 }
 
 func (uc *opportunityUseCase) mapFilterToDomain(filter *dto.OpportunityFilterRequest) domain.OpportunityFilter {
@@ -1838,13 +1807,12 @@ func (uc *opportunityUseCase) calculateListSummary(opportunities []*domain.Oppor
 	currency := "USD"
 
 	for _, opp := range opportunities {
-		if opp.Amount != nil {
-			totalValue += opp.Amount.Amount
+		// Amount and WeightedAmount are Money values, not pointers
+		totalValue += opp.Amount.Amount
+		if opp.Amount.Currency != "" {
 			currency = opp.Amount.Currency
 		}
-		if opp.WeightedAmount != nil {
-			weightedValue += opp.WeightedAmount.Amount
-		}
+		weightedValue += opp.WeightedAmount.Amount
 		totalProbability += opp.Probability
 	}
 
@@ -1893,28 +1861,36 @@ func (uc *opportunityUseCase) indexOpportunity(ctx context.Context, opportunity 
 
 	stageName := ""
 	if pipeline != nil {
-		if stage := pipeline.GetStageByID(opportunity.StageID); stage != nil {
+		if stage := pipeline.GetStage(opportunity.StageID); stage != nil {
 			stageName = stage.Name
 		}
 	}
 
 	searchable := ports.SearchableOpportunity{
-		ID:                opportunity.ID,
-		TenantID:          opportunity.TenantID,
-		Name:              opportunity.Name,
-		Status:            string(opportunity.Status),
-		Amount:            opportunity.Amount.Amount,
-		Currency:          opportunity.Amount.Currency,
-		Probability:       opportunity.Probability,
-		CustomerID:        opportunity.CustomerID,
-		PipelineID:        opportunity.PipelineID,
-		StageID:           opportunity.StageID,
-		StageName:         stageName,
-		OwnerID:           opportunity.OwnerID,
-		ExpectedCloseDate: opportunity.ExpectedCloseDate,
-		Tags:              opportunity.Tags,
-		CreatedAt:         opportunity.CreatedAt,
-		UpdatedAt:         opportunity.UpdatedAt,
+		ID:          opportunity.ID,
+		TenantID:    opportunity.TenantID,
+		Name:        opportunity.Name,
+		Status:      string(opportunity.Status),
+		Amount:      opportunity.Amount.Amount,
+		Currency:    opportunity.Amount.Currency,
+		Probability: opportunity.Probability,
+		PipelineID:  opportunity.PipelineID,
+		StageID:     opportunity.StageID,
+		StageName:   stageName,
+		OwnerID:     opportunity.OwnerID,
+		Tags:        opportunity.Tags,
+		CreatedAt:   opportunity.CreatedAt,
+		UpdatedAt:   opportunity.UpdatedAt,
+	}
+
+	// CustomerID is uuid.UUID in domain, *uuid.UUID in SearchableOpportunity
+	if opportunity.CustomerID != uuid.Nil {
+		searchable.CustomerID = &opportunity.CustomerID
+	}
+
+	// ExpectedCloseDate is *time.Time in domain, time.Time in SearchableOpportunity
+	if opportunity.ExpectedCloseDate != nil {
+		searchable.ExpectedCloseDate = *opportunity.ExpectedCloseDate
 	}
 
 	uc.searchService.IndexOpportunity(ctx, searchable)

@@ -6,10 +6,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/application/usecase"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/domain"
-	iamhttp "github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/interfaces/http"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/interfaces/http/middleware"
+	"github.com/kilang-desa-murni/crm/internal/iam/application/usecase"
+	"github.com/kilang-desa-murni/crm/internal/iam/domain"
+	iamhttp "github.com/kilang-desa-murni/crm/internal/iam/interfaces/http"
+	"github.com/kilang-desa-murni/crm/internal/iam/interfaces/http/middleware"
 )
 
 // TenantHandler handles tenant-related HTTP requests.

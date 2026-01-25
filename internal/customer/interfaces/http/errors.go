@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/application"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/domain"
+	"github.com/kilang-desa-murni/crm/internal/customer/application"
+	"github.com/kilang-desa-murni/crm/internal/customer/domain"
 )
 
 // ErrorResponse is the standard error response.

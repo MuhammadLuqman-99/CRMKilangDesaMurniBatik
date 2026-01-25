@@ -228,9 +228,9 @@ func (r *DealRepository) Update(ctx context.Context, deal *domain.Deal) error {
 			paid_amount = $15, outstanding_amount = $16, payment_term = $17,
 			contract_url = $18, notes = $19, tags = $20, custom_fields = $21,
 			contract_date = $22, start_date = $23, end_date = $24,
-			cancelled_at = $25, cancelled_by = $26, cancel_reason = $27,
-			updated_at = $28, updated_by = $29, version = version + 1
-		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL AND version = $30`
+			cancelled_at = $25,
+			updated_at = $26, updated_by = $27, version = version + 1
+		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL AND version = $28`
 
 	result, err := exec.ExecContext(ctx, query,
 		deal.TenantID,
@@ -258,8 +258,6 @@ func (r *DealRepository) Update(ctx context.Context, deal *domain.Deal) error {
 		NewNullTime(deal.Timeline.StartDate).NullTime,
 		NewNullTime(deal.Timeline.EndDate).NullTime,
 		NewNullTime(deal.CancelledAt).NullTime,
-		nullUUID(deal.CancelledBy),
-		nullString(deal.CancelReason),
 		time.Now().UTC(),
 		deal.CreatedBy,
 		deal.Version,
@@ -418,9 +416,9 @@ func (r *DealRepository) GetActiveDeals(ctx context.Context, tenantID uuid.UUID,
 	return r.GetByStatus(ctx, tenantID, domain.DealStatusActive, opts)
 }
 
-// GetCompletedDeals retrieves completed deals.
+// GetCompletedDeals retrieves fulfilled deals.
 func (r *DealRepository) GetCompletedDeals(ctx context.Context, tenantID uuid.UUID, opts domain.ListOptions) ([]*domain.Deal, int64, error) {
-	return r.GetByStatus(ctx, tenantID, domain.DealStatusCompleted, opts)
+	return r.GetByStatus(ctx, tenantID, domain.DealStatusFulfilled, opts)
 }
 
 // GetByOpportunity retrieves the deal created from an opportunity.
@@ -879,10 +877,6 @@ func (r *DealRepository) toDomain(row *dealRow) (*domain.Deal, error) {
 	if row.CancelledAt.Valid {
 		deal.CancelledAt = &row.CancelledAt.Time
 	}
-	if row.CancelledBy.Valid {
-		deal.CancelledBy = &row.CancelledBy.UUID
-	}
-	deal.CancelReason = row.CancelReason.String
 
 	// Custom fields
 	if row.CustomFields.Valid {

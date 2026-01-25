@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/customer/infrastructure/persistence/mongodb"
+	"github.com/kilang-desa-murni/crm/internal/customer/infrastructure/persistence/mongodb"
 )
 
 // Config holds all configuration for the Customer service.

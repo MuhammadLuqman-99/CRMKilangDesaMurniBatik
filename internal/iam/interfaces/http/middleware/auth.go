@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	iamhttp "github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/interfaces/http"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/application/ports"
+	iamhttp "github.com/kilang-desa-murni/crm/internal/iam/interfaces/http"
+	"github.com/kilang-desa-murni/crm/internal/iam/application/ports"
 )
 
 // Context keys for storing auth information

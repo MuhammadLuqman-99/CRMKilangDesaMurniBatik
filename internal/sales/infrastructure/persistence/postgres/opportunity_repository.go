@@ -245,10 +245,10 @@ func (r *OpportunityRepository) Update(ctx context.Context, opp *domain.Opportun
 			owner_id = $21, owner_name = $22, source = $23, campaign = $24, campaign_id = $25,
 			notes = $26, tags = $27, custom_fields = $28,
 			close_reason = $29, close_notes = $30, closed_at = $31, closed_by = $32,
-			competitor_id = $33, competitor_name = $34, deal_id = $35,
-			activity_count = $36, last_activity_at = $37,
-			updated_at = $38, updated_by = $39, version = version + 1
-		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL AND version = $40`
+			competitor_id = $33, competitor_name = $34,
+			activity_count = $35, last_activity_at = $36,
+			updated_at = $37, updated_by = $38, version = version + 1
+		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL AND version = $39`
 
 	var closeReason, closeNotes interface{}
 	var closedAt, closedBy, competitorID, competitorName interface{}
@@ -299,7 +299,6 @@ func (r *OpportunityRepository) Update(ctx context.Context, opp *domain.Opportun
 		closedBy,
 		competitorID,
 		competitorName,
-		nullUUID(opp.DealID),
 		opp.ActivityCount,
 		NewNullTime(opp.LastActivityAt).NullTime,
 		time.Now().UTC(),
@@ -920,11 +919,6 @@ func (r *OpportunityRepository) toDomain(row *opportunityRow) (*domain.Opportuni
 		opp.CampaignID = &row.CampaignID.UUID
 	}
 
-	// Deal
-	if row.DealID.Valid {
-		opp.DealID = &row.DealID.UUID
-	}
-
 	// Last activity
 	if row.LastActivityAt.Valid {
 		opp.LastActivityAt = &row.LastActivityAt.Time
@@ -932,7 +926,7 @@ func (r *OpportunityRepository) toDomain(row *opportunityRow) (*domain.Opportuni
 
 	// Close info
 	if row.ClosedAt.Valid {
-		opp.CloseInfo = &domain.OpportunityCloseInfo{
+		opp.CloseInfo = &domain.CloseInfo{
 			ClosedAt: row.ClosedAt.Time,
 			ClosedBy: row.ClosedBy.UUID,
 			Reason:   row.CloseReason.String,

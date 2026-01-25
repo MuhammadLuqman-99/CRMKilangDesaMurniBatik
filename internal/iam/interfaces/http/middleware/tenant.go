@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	iamhttp "github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/interfaces/http"
-	"github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik/internal/iam/domain"
+	iamhttp "github.com/kilang-desa-murni/crm/internal/iam/interfaces/http"
+	"github.com/kilang-desa-murni/crm/internal/iam/domain"
 )
 
 // TenantResolver interface for resolving tenant from request.

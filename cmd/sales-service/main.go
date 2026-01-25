@@ -12,12 +12,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kilang-desa-murni/crm/pkg/auth"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jmoiron/sqlx"
+
+	"github.com/kilang-desa-murni/crm/internal/sales/application/usecase"
+	"github.com/kilang-desa-murni/crm/internal/sales/infrastructure/messaging"
+	"github.com/kilang-desa-murni/crm/internal/sales/infrastructure/persistence/postgres"
+	saleshttp "github.com/kilang-desa-murni/crm/internal/sales/interfaces/http"
 	"github.com/kilang-desa-murni/crm/pkg/config"
 	"github.com/kilang-desa-murni/crm/pkg/database"
-	"github.com/kilang-desa-murni/crm/pkg/events"
 	"github.com/kilang-desa-murni/crm/pkg/logger"
-	"github.com/kilang-desa-murni/crm/pkg/middleware"
 	"github.com/kilang-desa-murni/crm/pkg/response"
 	"github.com/kilang-desa-murni/crm/pkg/tracer"
 )
@@ -70,29 +75,124 @@ func main() {
 	}
 	defer db.Close()
 
+	// Wrap sql.DB with sqlx for repositories
+	sqlxDB := sqlx.NewDb(db.DB, "postgres")
+
 	// Initialize Redis
-	redis, err := database.NewRedis(&cfg.Redis, log)
+	redisClient, err := database.NewRedis(&cfg.Redis, log)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to connect to Redis")
 	}
-	defer redis.Close()
+	defer redisClient.Close()
 
-	// Initialize RabbitMQ Event Bus
-	eventBus, err := events.NewRabbitMQEventBus(&cfg.RabbitMQ, log)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to connect to RabbitMQ")
+	// Initialize RabbitMQ Publisher
+	rabbitConfig := messaging.RabbitMQConfig{
+		URL:               cfg.RabbitMQ.URL,
+		Exchange:          messaging.SalesEventsExchange,
+		ExchangeType:      cfg.RabbitMQ.ExchangeType,
+		Durable:           true,
+		AutoDelete:        false,
+		DeliveryMode:      2, // Persistent
+		ContentType:       "application/json",
+		ReconnectDelay:    cfg.RabbitMQ.ReconnectDelay,
+		MaxReconnectTries: 10,
+		PrefetchCount:     cfg.RabbitMQ.PrefetchCount,
 	}
-	defer eventBus.Close()
 
-	// Initialize JWT Manager for token validation
-	jwtManager := auth.NewJWTManager(&cfg.JWT)
+	eventPublisher, err := messaging.NewRabbitMQPublisher(rabbitConfig)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize event publisher")
+	}
+	defer eventPublisher.Close()
 
-	// Create HTTP router
-	mux := http.NewServeMux()
+	// Declare queues
+	if err := eventPublisher.DeclareQueues(); err != nil {
+		log.Warn().Err(err).Msg("Failed to declare queues (non-fatal)")
+	}
 
-	// Health check endpoint
+	// Initialize repositories
+	leadRepo := postgres.NewLeadRepository(sqlxDB)
+	opportunityRepo := postgres.NewOpportunityRepository(sqlxDB)
+	dealRepo := postgres.NewDealRepository(sqlxDB)
+	pipelineRepo := postgres.NewPipelineRepository(sqlxDB)
+
+	// Initialize use cases
+	leadUseCase := usecase.NewLeadUseCase(
+		leadRepo,
+		opportunityRepo,
+		pipelineRepo,
+		eventPublisher,
+		nil, // customerService - inject if available
+		nil, // userService - inject if available
+		nil, // cacheService - inject if available
+		nil, // searchService - inject if available
+		nil, // idGenerator - inject if available
+	)
+
+	opportunityUseCase := usecase.NewOpportunityUseCase(
+		opportunityRepo,
+		pipelineRepo,
+		dealRepo,
+		eventPublisher,
+		nil, // customerService
+		nil, // userService
+		nil, // productService
+		nil, // cacheService
+		nil, // searchService
+		nil, // idGenerator
+	)
+
+	dealUseCase := usecase.NewDealUseCase(
+		dealRepo,
+		opportunityRepo,
+		eventPublisher,
+		nil, // customerService
+		nil, // userService
+		nil, // productService
+		nil, // cacheService
+		nil, // searchService
+		nil, // idGenerator
+		nil, // notificationService
+	)
+
+	pipelineUseCase := usecase.NewPipelineUseCase(
+		pipelineRepo,
+		opportunityRepo,
+		eventPublisher,
+		nil, // cacheService
+		nil, // idGenerator
+	)
+
+	// Initialize HTTP handlers
+	handler := saleshttp.NewHandler(saleshttp.HandlerDependencies{
+		LeadUseCase:        leadUseCase,
+		OpportunityUseCase: opportunityUseCase,
+		DealUseCase:        dealUseCase,
+		PipelineUseCase:    pipelineUseCase,
+		MiddlewareConfig: saleshttp.MiddlewareConfig{
+			JWTSecret:         cfg.JWT.Secret,
+			JWTIssuer:         cfg.JWT.Issuer,
+			JWTAudience:       cfg.JWT.Audience,
+			SkipAuth:          cfg.App.Environment == "development",
+			AllowedOrigins:    []string{"*"},
+			RateLimitRequests: 100,
+			RateLimitWindow:   time.Minute,
+		},
+	})
+
+	// Create Chi router
+	r := chi.NewRouter()
+
+	// Global middleware
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Compress(5))
+
+	// Health check endpoint (no auth)
 	startTime := time.Now()
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		checks := make(map[string]response.HealthCheck)
 
 		// Check PostgreSQL
@@ -103,10 +203,17 @@ func main() {
 		}
 
 		// Check Redis
-		if err := redis.Health(r.Context()); err != nil {
+		if err := redisClient.Health(r.Context()); err != nil {
 			checks["redis"] = response.HealthCheck{Status: "unhealthy", Message: err.Error()}
 		} else {
 			checks["redis"] = response.HealthCheck{Status: "healthy"}
+		}
+
+		// Check RabbitMQ
+		if !eventPublisher.IsConnected() {
+			checks["rabbitmq"] = response.HealthCheck{Status: "unhealthy", Message: "connection closed"}
+		} else {
+			checks["rabbitmq"] = response.HealthCheck{Status: "healthy"}
 		}
 
 		status := "healthy"
@@ -121,124 +228,18 @@ func main() {
 	})
 
 	// Metrics endpoint (placeholder)
-	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte("# Metrics placeholder\n"))
 	})
 
-	// Lead API routes
-	mux.HandleFunc("GET /api/v1/leads", func(w http.ResponseWriter, r *http.Request) {
-		response.Paginated(w, []interface{}{}, 1, 10, 0)
-	})
-
-	mux.HandleFunc("POST /api/v1/leads", func(w http.ResponseWriter, r *http.Request) {
-		response.Created(w, map[string]string{"message": "Create lead - TODO"})
-	})
-
-	mux.HandleFunc("GET /api/v1/leads/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		response.OK(w, map[string]string{"message": "Get lead", "id": id})
-	})
-
-	mux.HandleFunc("PUT /api/v1/leads/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		response.OK(w, map[string]string{"message": "Update lead", "id": id})
-	})
-
-	mux.HandleFunc("POST /api/v1/leads/{id}/convert", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		response.OK(w, map[string]string{"message": "Convert lead to opportunity", "id": id})
-	})
-
-	// Opportunity API routes
-	mux.HandleFunc("GET /api/v1/opportunities", func(w http.ResponseWriter, r *http.Request) {
-		response.Paginated(w, []interface{}{}, 1, 10, 0)
-	})
-
-	mux.HandleFunc("POST /api/v1/opportunities", func(w http.ResponseWriter, r *http.Request) {
-		response.Created(w, map[string]string{"message": "Create opportunity - TODO"})
-	})
-
-	mux.HandleFunc("GET /api/v1/opportunities/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		response.OK(w, map[string]string{"message": "Get opportunity", "id": id})
-	})
-
-	mux.HandleFunc("PUT /api/v1/opportunities/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		response.OK(w, map[string]string{"message": "Update opportunity", "id": id})
-	})
-
-	mux.HandleFunc("POST /api/v1/opportunities/{id}/move-stage", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		response.OK(w, map[string]string{"message": "Move opportunity stage", "id": id})
-	})
-
-	mux.HandleFunc("POST /api/v1/opportunities/{id}/win", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		response.OK(w, map[string]string{"message": "Mark opportunity as won", "id": id})
-	})
-
-	mux.HandleFunc("POST /api/v1/opportunities/{id}/lose", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		response.OK(w, map[string]string{"message": "Mark opportunity as lost", "id": id})
-	})
-
-	// Pipeline API routes
-	mux.HandleFunc("GET /api/v1/pipelines", func(w http.ResponseWriter, r *http.Request) {
-		response.OK(w, []interface{}{})
-	})
-
-	mux.HandleFunc("POST /api/v1/pipelines", func(w http.ResponseWriter, r *http.Request) {
-		response.Created(w, map[string]string{"message": "Create pipeline - TODO"})
-	})
-
-	mux.HandleFunc("GET /api/v1/pipelines/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		response.OK(w, map[string]string{"message": "Get pipeline", "id": id})
-	})
-
-	mux.HandleFunc("GET /api/v1/pipelines/{id}/analytics", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		response.OK(w, map[string]interface{}{
-			"pipeline_id":        id,
-			"total_value":        0,
-			"weighted_value":     0,
-			"opportunities_count": 0,
-			"win_rate":           0,
-		})
-	})
-
-	// Deal API routes
-	mux.HandleFunc("GET /api/v1/deals", func(w http.ResponseWriter, r *http.Request) {
-		response.Paginated(w, []interface{}{}, 1, 10, 0)
-	})
-
-	mux.HandleFunc("GET /api/v1/deals/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		response.OK(w, map[string]string{"message": "Get deal", "id": id})
-	})
-
-	// Apply middleware
-	handler := middleware.Chain(
-		middleware.RequestID,
-		middleware.Logger(log),
-		middleware.Recover(log),
-		middleware.CORS([]string{"*"}, []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}, []string{"*"}),
-		middleware.ContentType("application/json"),
-		middleware.Auth(jwtManager),
-	)(mux)
-
-	// Create public handler (without auth)
-	publicMux := http.NewServeMux()
-	publicMux.Handle("/health", mux)
-	publicMux.Handle("/metrics", mux)
-	publicMux.Handle("/", handler)
+	// Register Sales API routes
+	handler.RegisterRoutes(r)
 
 	// Create HTTP server
 	server := &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
-		Handler:      publicMux,
+		Handler:      r,
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 		IdleTimeout:  cfg.Server.IdleTimeout,
@@ -263,11 +264,16 @@ func main() {
 	log.Info().Msg("Shutting down server...")
 
 	// Create shutdown context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
+	defer shutdownCancel()
+
+	// Close event publisher
+	if err := eventPublisher.Close(); err != nil {
+		log.Error().Err(err).Msg("Failed to close event publisher")
+	}
 
 	// Graceful shutdown
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("Server forced to shutdown")
 	}
 

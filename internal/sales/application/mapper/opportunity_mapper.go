@@ -4,8 +4,8 @@ package mapper
 import (
 	"time"
 
-	"github.com/DesmondSanctworker/CRMKilangDesaMurniBatik/internal/sales/application/dto"
-	"github.com/DesmondSanctworker/CRMKilangDesaMurniBatik/internal/sales/domain"
+	"github.com/kilang-desa-murni/crm/internal/sales/application/dto"
+	"github.com/kilang-desa-murni/crm/internal/sales/domain"
 )
 
 // ============================================================================

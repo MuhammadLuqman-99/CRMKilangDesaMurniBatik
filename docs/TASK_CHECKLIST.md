@@ -258,13 +258,17 @@
 - [x] Entity to DTO mappers (Lead, Opportunity, Deal, Pipeline mappers)
 - [x] GetPipelineAnalytics use case
 
-### 4.3 Infrastructure Layer
-- [x] PostgreSQL LeadRepository (connection ready)
-- [x] PostgreSQL OpportunityRepository (connection ready)
-- [x] PostgreSQL DealRepository (connection ready)
-- [ ] Transactional Outbox
-- [ ] Event publisher
-- [ ] Database migrations
+### 4.3 Infrastructure Layer ✅ COMPLETED
+- [x] PostgreSQL LeadRepository (full implementation with CRUD, filtering, bulk ops, statistics)
+- [x] PostgreSQL OpportunityRepository (full implementation with products, contacts, stage history)
+- [x] PostgreSQL DealRepository (full implementation with line items, invoices, payments)
+- [x] PostgreSQL PipelineRepository (full implementation with stages, statistics)
+- [x] Unit of Work pattern (transaction management, repository coordination)
+- [x] Event Store (domain event persistence, retrieval by aggregate/type/time)
+- [x] Transactional Outbox Repository (reliable event publishing, retry logic)
+- [x] RabbitMQ Event Publisher (with reconnection, confirms, DLQ)
+- [x] Outbox Processor (background processing, cleanup worker)
+- [x] Database migrations (comprehensive schema for all sales entities)
 
 ### 4.4 API Endpoints
 - [x] CRUD /leads (stubs)
@@ -429,12 +433,12 @@
 | Phase 1 | 22 | 22 | ✅ 100% |
 | Phase 2 | 68 | 68 | ✅ 100% |
 | Phase 3 | 60 | 60 | ✅ 100% |
-| Phase 4 | 51 | 43 | 🔄 84% |
+| Phase 4 | 55 | 51 | 🔄 93% |
 | Phase 5 | 17 | 5 | ⏳ 29% |
 | Phase 6 | 17 | 11 | ⏳ 65% |
 | Phase 7 | 19 | 0 | ⏳ 0% |
 | Phase 8 | 22 | 8 | ⏳ 36% |
-| **Total** | **276** | **217** | **79%** |
+| **Total** | **280** | **225** | **80%** |
 
 ---
 
@@ -450,5 +454,5 @@
 
 ---
 
-**Last Updated**: 2026-01-24
+**Last Updated**: 2026-01-25
 **Repository**: https://github.com/MuhammadLuqman-99/CRMKilangDesaMurniBatik

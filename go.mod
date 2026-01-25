@@ -3,9 +3,11 @@ module github.com/kilang-desa-murni/crm
 go 1.22
 
 require (
+	github.com/go-chi/chi/v5 v5.0.12
 	github.com/go-playground/validator/v10 v10.18.0
 	github.com/golang-jwt/jwt/v5 v5.2.0
 	github.com/google/uuid v1.6.0
+	github.com/jmoiron/sqlx v1.3.5
 	github.com/lib/pq v1.10.9
 	github.com/rabbitmq/amqp091-go v1.9.0
 	github.com/redis/go-redis/v9 v9.4.0

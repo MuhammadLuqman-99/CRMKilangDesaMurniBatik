@@ -62,8 +62,8 @@ type LeadFilter struct {
 	Sources []LeadSource `json:"sources,omitempty"`
 
 	// Assignment filters
-	OwnerIDs     []uuid.UUID `json:"owner_ids,omitempty"`
-	Unassigned   *bool       `json:"unassigned,omitempty"`
+	OwnerIDs   []uuid.UUID `json:"owner_ids,omitempty"`
+	Unassigned *bool       `json:"unassigned,omitempty"`
 
 	// Score filters
 	MinScore *int `json:"min_score,omitempty"`
@@ -294,27 +294,27 @@ type PipelineRepository interface {
 
 // PipelineStatistics contains aggregated statistics for a pipeline.
 type PipelineStatistics struct {
-	PipelineID          uuid.UUID            `json:"pipeline_id"`
-	TotalOpportunities  int64                `json:"total_opportunities"`
-	OpenOpportunities   int64                `json:"open_opportunities"`
-	WonOpportunities    int64                `json:"won_opportunities"`
-	LostOpportunities   int64                `json:"lost_opportunities"`
-	TotalValue          Money                `json:"total_value"`
-	WeightedValue       Money                `json:"weighted_value"`
-	WinRate             float64              `json:"win_rate"`
-	AverageSalesCycle   int                  `json:"average_sales_cycle_days"`
-	StageDistribution   map[uuid.UUID]int64  `json:"stage_distribution"`
-	ConversionRates     map[uuid.UUID]float64 `json:"conversion_rates"` // stage -> next stage conversion
+	PipelineID         uuid.UUID             `json:"pipeline_id"`
+	TotalOpportunities int64                 `json:"total_opportunities"`
+	OpenOpportunities  int64                 `json:"open_opportunities"`
+	WonOpportunities   int64                 `json:"won_opportunities"`
+	LostOpportunities  int64                 `json:"lost_opportunities"`
+	TotalValue         Money                 `json:"total_value"`
+	WeightedValue      Money                 `json:"weighted_value"`
+	WinRate            float64               `json:"win_rate"`
+	AverageSalesCycle  int                   `json:"average_sales_cycle_days"`
+	StageDistribution  map[uuid.UUID]int64   `json:"stage_distribution"`
+	ConversionRates    map[uuid.UUID]float64 `json:"conversion_rates"` // stage -> next stage conversion
 }
 
 // StageStatistics contains aggregated statistics for a pipeline stage.
 type StageStatistics struct {
-	StageID              uuid.UUID `json:"stage_id"`
-	TotalOpportunities   int64     `json:"total_opportunities"`
-	TotalValue           Money     `json:"total_value"`
-	AverageTimeInStage   int       `json:"average_time_in_stage_days"`
-	ConversionRate       float64   `json:"conversion_rate"`
-	AverageOpportunityAge int      `json:"average_opportunity_age_days"`
+	StageID               uuid.UUID `json:"stage_id"`
+	TotalOpportunities    int64     `json:"total_opportunities"`
+	TotalValue            Money     `json:"total_value"`
+	AverageTimeInStage    int       `json:"average_time_in_stage_days"`
+	ConversionRate        float64   `json:"conversion_rate"`
+	AverageOpportunityAge int       `json:"average_opportunity_age_days"`
 }
 
 // ============================================================================
@@ -391,6 +391,71 @@ type EventStore interface {
 }
 
 // ============================================================================
+// Saga Repository Interface
+// ============================================================================
+
+// SagaRepository defines the interface for lead conversion saga persistence operations.
+type SagaRepository interface {
+	// Create creates a new saga instance.
+	Create(ctx context.Context, saga *LeadConversionSaga) error
+
+	// GetByID retrieves a saga by its ID.
+	GetByID(ctx context.Context, tenantID, sagaID uuid.UUID) (*LeadConversionSaga, error)
+
+	// GetByLeadID retrieves a saga by lead ID.
+	GetByLeadID(ctx context.Context, tenantID, leadID uuid.UUID) (*LeadConversionSaga, error)
+
+	// GetByIdempotencyKey retrieves a saga by its idempotency key.
+	GetByIdempotencyKey(ctx context.Context, tenantID uuid.UUID, key string) (*LeadConversionSaga, error)
+
+	// Update updates an existing saga.
+	Update(ctx context.Context, saga *LeadConversionSaga) error
+
+	// GetPendingSagas retrieves sagas that are stuck in non-terminal states.
+	GetPendingSagas(ctx context.Context, olderThan time.Duration, limit int) ([]*LeadConversionSaga, error)
+
+	// GetByState retrieves sagas by their current state.
+	GetByState(ctx context.Context, tenantID uuid.UUID, state SagaState, opts ListOptions) ([]*LeadConversionSaga, int64, error)
+
+	// GetCompensatingSagas retrieves sagas that are currently compensating.
+	GetCompensatingSagas(ctx context.Context, limit int) ([]*LeadConversionSaga, error)
+
+	// GetFailedSagas retrieves sagas that failed and need attention.
+	GetFailedSagas(ctx context.Context, tenantID uuid.UUID, opts ListOptions) ([]*LeadConversionSaga, int64, error)
+
+	// DeleteOldCompletedSagas deletes sagas that completed successfully and are older than specified time.
+	DeleteOldCompletedSagas(ctx context.Context, olderThan time.Duration) (int64, error)
+
+	// CountByState returns counts of sagas grouped by state.
+	CountByState(ctx context.Context, tenantID uuid.UUID) (map[SagaState]int64, error)
+}
+
+// ============================================================================
+// Idempotency Repository Interface
+// ============================================================================
+
+// IdempotencyRepository defines the interface for idempotency key storage and retrieval.
+type IdempotencyRepository interface {
+	// Store saves an idempotency key with its associated resource ID.
+	Store(ctx context.Context, key *IdempotencyKey) error
+
+	// Get retrieves the resource ID associated with an idempotency key.
+	Get(ctx context.Context, tenantID uuid.UUID, key string) (*IdempotencyKey, error)
+
+	// Exists checks if an idempotency key exists.
+	Exists(ctx context.Context, tenantID uuid.UUID, key string) (bool, error)
+
+	// Delete removes an idempotency key.
+	Delete(ctx context.Context, tenantID uuid.UUID, key string) error
+
+	// DeleteExpired removes all expired idempotency keys.
+	DeleteExpired(ctx context.Context) (int64, error)
+
+	// Extend extends the expiration time of an idempotency key.
+	Extend(ctx context.Context, tenantID uuid.UUID, key string, newExpiry time.Time) error
+}
+
+// ============================================================================
 // Unit of Work Interface
 // ============================================================================
 
@@ -411,4 +476,6 @@ type UnitOfWork interface {
 	Deals() DealRepository
 	Pipelines() PipelineRepository
 	Events() EventStore
+	Sagas() SagaRepository
+	IdempotencyKeys() IdempotencyRepository
 }

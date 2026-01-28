@@ -495,6 +495,14 @@ func nullStringValue(ns sql.NullString) string {
 	return ""
 }
 
+// nullStringPtr converts a *string to sql.NullString.
+func nullStringPtr(s *string) sql.NullString {
+	if s == nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: *s, Valid: true}
+}
+
 // ============================================================================
 // Sorting Helpers
 // ============================================================================

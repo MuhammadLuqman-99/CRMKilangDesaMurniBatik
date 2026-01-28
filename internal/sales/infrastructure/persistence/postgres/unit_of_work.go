@@ -28,6 +28,8 @@ type UnitOfWork struct {
 	dealRepo        *DealRepository
 	pipelineRepo    *PipelineRepository
 	eventStore      *EventStore
+	sagaRepo        *SagaRepository
+	idempotencyRepo *IdempotencyRepository
 	isTransaction   bool
 }
 
@@ -40,6 +42,8 @@ func NewUnitOfWork(db *sqlx.DB) *UnitOfWork {
 		dealRepo:        NewDealRepository(db),
 		pipelineRepo:    NewPipelineRepository(db),
 		eventStore:      NewEventStore(db),
+		sagaRepo:        NewSagaRepository(db),
+		idempotencyRepo: NewIdempotencyRepository(db),
 		isTransaction:   false,
 	}
 }
@@ -70,6 +74,8 @@ func (uow *UnitOfWork) Begin(ctx context.Context) (domain.UnitOfWork, error) {
 		dealRepo:        uow.dealRepo,
 		pipelineRepo:    uow.pipelineRepo,
 		eventStore:      uow.eventStore,
+		sagaRepo:        uow.sagaRepo,
+		idempotencyRepo: uow.idempotencyRepo,
 		isTransaction:   true,
 	}, nil
 }
@@ -127,6 +133,16 @@ func (uow *UnitOfWork) Pipelines() domain.PipelineRepository {
 // Events returns the event store.
 func (uow *UnitOfWork) Events() domain.EventStore {
 	return uow.eventStore
+}
+
+// Sagas returns the saga repository.
+func (uow *UnitOfWork) Sagas() domain.SagaRepository {
+	return uow.sagaRepo
+}
+
+// IdempotencyKeys returns the idempotency key repository.
+func (uow *UnitOfWork) IdempotencyKeys() domain.IdempotencyRepository {
+	return uow.idempotencyRepo
 }
 
 // Context returns the transaction context (for repositories to use).
@@ -198,6 +214,8 @@ func (uow *UnitOfWork) WithSerializableTransaction(ctx context.Context, fn func(
 		dealRepo:        uow.dealRepo,
 		pipelineRepo:    uow.pipelineRepo,
 		eventStore:      uow.eventStore,
+		sagaRepo:        uow.sagaRepo,
+		idempotencyRepo: uow.idempotencyRepo,
 		isTransaction:   true,
 	}
 
@@ -466,13 +484,13 @@ type storedEvent struct {
 	occurredAt    time.Time
 }
 
-func (e *storedEvent) EventID() uuid.UUID      { return e.id }
-func (e *storedEvent) TenantID() uuid.UUID     { return e.tenantID }
-func (e *storedEvent) AggregateID() uuid.UUID  { return e.aggregateID }
-func (e *storedEvent) AggregateType() string   { return e.aggregateType }
-func (e *storedEvent) EventType() string       { return e.eventType }
-func (e *storedEvent) Version() int            { return e.version }
-func (e *storedEvent) OccurredAt() time.Time   { return e.occurredAt }
+func (e *storedEvent) EventID() uuid.UUID     { return e.id }
+func (e *storedEvent) TenantID() uuid.UUID    { return e.tenantID }
+func (e *storedEvent) AggregateID() uuid.UUID { return e.aggregateID }
+func (e *storedEvent) AggregateType() string  { return e.aggregateType }
+func (e *storedEvent) EventType() string      { return e.eventType }
+func (e *storedEvent) Version() int           { return e.version }
+func (e *storedEvent) OccurredAt() time.Time  { return e.occurredAt }
 
 // Data returns the event data (for internal use, not part of DomainEvent interface).
 func (e *storedEvent) Data() map[string]interface{} { return e.data }

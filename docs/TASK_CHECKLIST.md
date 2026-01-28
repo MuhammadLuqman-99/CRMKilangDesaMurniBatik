@@ -219,7 +219,7 @@
 
 ---
 
-## Phase 4: Sales Pipeline Service 🔄 IN PROGRESS
+## Phase 4: Sales Pipeline Service ✅ COMPLETED
 
 ### 4.1 Domain Layer ✅ COMPLETED
 - [x] Lead aggregate (with scoring, qualification, status management, conversion to opportunity)
@@ -281,11 +281,12 @@
 - [x] GET /pipelines/{id}/analytics (stub)
 - [x] GET /deals (stubs)
 
-### 4.5 Saga Implementation
-- [ ] LeadConversion Saga
-- [ ] Compensating transactions
-- [ ] Saga orchestrator
-- [ ] Idempotency checks
+### 4.5 Saga Implementation ✅ COMPLETED
+- [x] LeadConversion Saga (domain types, steps, events)
+- [x] Compensating transactions (customer, opportunity, lead reversion)
+- [x] Saga orchestrator (step execution, compensation logic)
+- [x] Idempotency checks (middleware, repository, duplicate detection)
+- [x] Saga API endpoints (status check, retry, list by state)
 
 ---
 
@@ -433,12 +434,12 @@
 | Phase 1 | 22 | 22 | ✅ 100% |
 | Phase 2 | 68 | 68 | ✅ 100% |
 | Phase 3 | 60 | 60 | ✅ 100% |
-| Phase 4 | 55 | 51 | 🔄 93% |
+| Phase 4 | 56 | 56 | ✅ 100% |
 | Phase 5 | 17 | 5 | ⏳ 29% |
 | Phase 6 | 17 | 11 | ⏳ 65% |
 | Phase 7 | 19 | 0 | ⏳ 0% |
 | Phase 8 | 22 | 8 | ⏳ 36% |
-| **Total** | **280** | **225** | **80%** |
+| **Total** | **281** | **230** | **82%** |
 
 ---
 
@@ -454,5 +455,5 @@
 
 ---
 
-**Last Updated**: 2026-01-25
+**Last Updated**: 2026-01-28
 **Repository**: https://github.com/kilang-desa-murni/crm

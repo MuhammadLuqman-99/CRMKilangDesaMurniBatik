@@ -10,28 +10,29 @@ import (
 
 // Lead errors
 var (
-	ErrLeadNotFound           = errors.New("lead not found")
-	ErrLeadAlreadyExists      = errors.New("lead already exists")
-	ErrLeadAlreadyConverted   = errors.New("lead is already converted")
-	ErrLeadAlreadyQualified   = errors.New("lead is already qualified")
+	ErrLeadNotFound            = errors.New("lead not found")
+	ErrLeadAlreadyExists       = errors.New("lead already exists")
+	ErrLeadAlreadyConverted    = errors.New("lead is already converted")
+	ErrLeadAlreadyQualified    = errors.New("lead is already qualified")
 	ErrLeadAlreadyDisqualified = errors.New("lead is already disqualified")
-	ErrLeadNotQualified       = errors.New("lead is not qualified")
-	ErrInvalidLeadStatus      = errors.New("invalid lead status")
-	ErrInvalidLeadSource      = errors.New("invalid lead source")
-	ErrInvalidLeadRating      = errors.New("invalid lead rating")
-	ErrLeadVersionMismatch    = errors.New("lead version mismatch")
+	ErrLeadNotQualified        = errors.New("lead is not qualified")
+	ErrLeadNotConverted        = errors.New("lead is not converted")
+	ErrInvalidLeadStatus       = errors.New("invalid lead status")
+	ErrInvalidLeadSource       = errors.New("invalid lead source")
+	ErrInvalidLeadRating       = errors.New("invalid lead rating")
+	ErrLeadVersionMismatch     = errors.New("lead version mismatch")
 )
 
 // LeadStatus represents the status of a lead.
 type LeadStatus string
 
 const (
-	LeadStatusNew           LeadStatus = "new"
-	LeadStatusContacted     LeadStatus = "contacted"
-	LeadStatusQualified     LeadStatus = "qualified"
-	LeadStatusUnqualified   LeadStatus = "unqualified"
-	LeadStatusConverted     LeadStatus = "converted"
-	LeadStatusNurturing     LeadStatus = "nurturing"
+	LeadStatusNew         LeadStatus = "new"
+	LeadStatusContacted   LeadStatus = "contacted"
+	LeadStatusQualified   LeadStatus = "qualified"
+	LeadStatusUnqualified LeadStatus = "unqualified"
+	LeadStatusConverted   LeadStatus = "converted"
+	LeadStatusNurturing   LeadStatus = "nurturing"
 )
 
 // ValidLeadStatuses returns all valid lead statuses.
@@ -65,15 +66,15 @@ func (s LeadStatus) CanConvert() bool {
 type LeadSource string
 
 const (
-	LeadSourceWebsite      LeadSource = "website"
-	LeadSourceReferral     LeadSource = "referral"
-	LeadSourceSocialMedia  LeadSource = "social_media"
-	LeadSourceAdvertising  LeadSource = "advertising"
-	LeadSourceTradeShow    LeadSource = "trade_show"
-	LeadSourceColdCall     LeadSource = "cold_call"
-	LeadSourceEmail        LeadSource = "email"
-	LeadSourcePartner      LeadSource = "partner"
-	LeadSourceOther        LeadSource = "other"
+	LeadSourceWebsite     LeadSource = "website"
+	LeadSourceReferral    LeadSource = "referral"
+	LeadSourceSocialMedia LeadSource = "social_media"
+	LeadSourceAdvertising LeadSource = "advertising"
+	LeadSourceTradeShow   LeadSource = "trade_show"
+	LeadSourceColdCall    LeadSource = "cold_call"
+	LeadSourceEmail       LeadSource = "email"
+	LeadSourcePartner     LeadSource = "partner"
+	LeadSourceOther       LeadSource = "other"
 )
 
 // ValidLeadSources returns all valid lead sources.
@@ -105,9 +106,9 @@ func (s LeadSource) IsValid() bool {
 type LeadRating string
 
 const (
-	LeadRatingHot    LeadRating = "hot"
-	LeadRatingWarm   LeadRating = "warm"
-	LeadRatingCold   LeadRating = "cold"
+	LeadRatingHot  LeadRating = "hot"
+	LeadRatingWarm LeadRating = "warm"
+	LeadRatingCold LeadRating = "cold"
 )
 
 // ValidLeadRatings returns all valid lead ratings.
@@ -131,15 +132,15 @@ func (r LeadRating) IsValid() bool {
 
 // LeadContact represents contact information for a lead.
 type LeadContact struct {
-	FirstName    string   `json:"first_name" bson:"first_name"`
-	LastName     string   `json:"last_name" bson:"last_name"`
-	Email        string   `json:"email" bson:"email"`
-	Phone        string   `json:"phone,omitempty" bson:"phone,omitempty"`
-	Mobile       string   `json:"mobile,omitempty" bson:"mobile,omitempty"`
-	JobTitle     string   `json:"job_title,omitempty" bson:"job_title,omitempty"`
-	Department   string   `json:"department,omitempty" bson:"department,omitempty"`
-	LinkedIn     string   `json:"linkedin,omitempty" bson:"linkedin,omitempty"`
-	Twitter      string   `json:"twitter,omitempty" bson:"twitter,omitempty"`
+	FirstName  string `json:"first_name" bson:"first_name"`
+	LastName   string `json:"last_name" bson:"last_name"`
+	Email      string `json:"email" bson:"email"`
+	Phone      string `json:"phone,omitempty" bson:"phone,omitempty"`
+	Mobile     string `json:"mobile,omitempty" bson:"mobile,omitempty"`
+	JobTitle   string `json:"job_title,omitempty" bson:"job_title,omitempty"`
+	Department string `json:"department,omitempty" bson:"department,omitempty"`
+	LinkedIn   string `json:"linkedin,omitempty" bson:"linkedin,omitempty"`
+	Twitter    string `json:"twitter,omitempty" bson:"twitter,omitempty"`
 }
 
 // FullName returns the full name of the contact.
@@ -152,25 +153,25 @@ func (c LeadContact) FullName() string {
 
 // LeadCompany represents company information for a lead.
 type LeadCompany struct {
-	Name         string `json:"name" bson:"name"`
-	Website      string `json:"website,omitempty" bson:"website,omitempty"`
-	Industry     string `json:"industry,omitempty" bson:"industry,omitempty"`
-	Size         string `json:"size,omitempty" bson:"size,omitempty"` // e.g., "1-10", "11-50", "51-200"
-	Revenue      string `json:"revenue,omitempty" bson:"revenue,omitempty"`
-	Address      string `json:"address,omitempty" bson:"address,omitempty"`
-	City         string `json:"city,omitempty" bson:"city,omitempty"`
-	State        string `json:"state,omitempty" bson:"state,omitempty"`
-	Country      string `json:"country,omitempty" bson:"country,omitempty"`
-	PostalCode   string `json:"postal_code,omitempty" bson:"postal_code,omitempty"`
+	Name       string `json:"name" bson:"name"`
+	Website    string `json:"website,omitempty" bson:"website,omitempty"`
+	Industry   string `json:"industry,omitempty" bson:"industry,omitempty"`
+	Size       string `json:"size,omitempty" bson:"size,omitempty"` // e.g., "1-10", "11-50", "51-200"
+	Revenue    string `json:"revenue,omitempty" bson:"revenue,omitempty"`
+	Address    string `json:"address,omitempty" bson:"address,omitempty"`
+	City       string `json:"city,omitempty" bson:"city,omitempty"`
+	State      string `json:"state,omitempty" bson:"state,omitempty"`
+	Country    string `json:"country,omitempty" bson:"country,omitempty"`
+	PostalCode string `json:"postal_code,omitempty" bson:"postal_code,omitempty"`
 }
 
 // LeadScore represents the scoring for a lead.
 type LeadScore struct {
-	Score           int       `json:"score" bson:"score"` // 0-100
-	Demographic     int       `json:"demographic" bson:"demographic"`
-	Behavioral      int       `json:"behavioral" bson:"behavioral"`
-	LastCalculated  time.Time `json:"last_calculated" bson:"last_calculated"`
-	ScoreHistory    []ScoreEntry `json:"score_history,omitempty" bson:"score_history,omitempty"`
+	Score          int          `json:"score" bson:"score"` // 0-100
+	Demographic    int          `json:"demographic" bson:"demographic"`
+	Behavioral     int          `json:"behavioral" bson:"behavioral"`
+	LastCalculated time.Time    `json:"last_calculated" bson:"last_calculated"`
+	ScoreHistory   []ScoreEntry `json:"score_history,omitempty" bson:"score_history,omitempty"`
 }
 
 // ScoreEntry represents a historical score entry.
@@ -182,43 +183,43 @@ type ScoreEntry struct {
 
 // LeadEngagement tracks lead engagement metrics.
 type LeadEngagement struct {
-	EmailsOpened    int       `json:"emails_opened" bson:"emails_opened"`
-	EmailsClicked   int       `json:"emails_clicked" bson:"emails_clicked"`
-	WebVisits       int       `json:"web_visits" bson:"web_visits"`
-	FormSubmissions int       `json:"form_submissions" bson:"form_submissions"`
+	EmailsOpened    int        `json:"emails_opened" bson:"emails_opened"`
+	EmailsClicked   int        `json:"emails_clicked" bson:"emails_clicked"`
+	WebVisits       int        `json:"web_visits" bson:"web_visits"`
+	FormSubmissions int        `json:"form_submissions" bson:"form_submissions"`
 	LastEngagement  *time.Time `json:"last_engagement,omitempty" bson:"last_engagement,omitempty"`
 }
 
 // Lead represents a sales lead (potential customer).
 type Lead struct {
-	ID              uuid.UUID             `json:"id" bson:"_id"`
-	TenantID        uuid.UUID             `json:"tenant_id" bson:"tenant_id"`
-	Code            string                `json:"code" bson:"code"` // e.g., "LD-2024-001"
-	Status          LeadStatus            `json:"status" bson:"status"`
-	Source          LeadSource            `json:"source" bson:"source"`
-	Rating          LeadRating            `json:"rating" bson:"rating"`
-	Contact         LeadContact           `json:"contact" bson:"contact"`
-	Company         LeadCompany           `json:"company" bson:"company"`
-	EstimatedValue  Money                 `json:"estimated_value" bson:"estimated_value"`
-	Score           LeadScore             `json:"score" bson:"score"`
-	Engagement      LeadEngagement        `json:"engagement" bson:"engagement"`
-	Campaign        string                `json:"campaign,omitempty" bson:"campaign,omitempty"`
-	CampaignID      *uuid.UUID            `json:"campaign_id,omitempty" bson:"campaign_id,omitempty"`
-	OwnerID         *uuid.UUID            `json:"owner_id,omitempty" bson:"owner_id,omitempty"`
-	OwnerName       string                `json:"owner_name,omitempty" bson:"owner_name,omitempty"`
-	Tags            []string              `json:"tags,omitempty" bson:"tags,omitempty"`
-	Description     string                `json:"description,omitempty" bson:"description,omitempty"`
-	Notes           string                `json:"notes,omitempty" bson:"notes,omitempty"`
+	ID              uuid.UUID              `json:"id" bson:"_id"`
+	TenantID        uuid.UUID              `json:"tenant_id" bson:"tenant_id"`
+	Code            string                 `json:"code" bson:"code"` // e.g., "LD-2024-001"
+	Status          LeadStatus             `json:"status" bson:"status"`
+	Source          LeadSource             `json:"source" bson:"source"`
+	Rating          LeadRating             `json:"rating" bson:"rating"`
+	Contact         LeadContact            `json:"contact" bson:"contact"`
+	Company         LeadCompany            `json:"company" bson:"company"`
+	EstimatedValue  Money                  `json:"estimated_value" bson:"estimated_value"`
+	Score           LeadScore              `json:"score" bson:"score"`
+	Engagement      LeadEngagement         `json:"engagement" bson:"engagement"`
+	Campaign        string                 `json:"campaign,omitempty" bson:"campaign,omitempty"`
+	CampaignID      *uuid.UUID             `json:"campaign_id,omitempty" bson:"campaign_id,omitempty"`
+	OwnerID         *uuid.UUID             `json:"owner_id,omitempty" bson:"owner_id,omitempty"`
+	OwnerName       string                 `json:"owner_name,omitempty" bson:"owner_name,omitempty"`
+	Tags            []string               `json:"tags,omitempty" bson:"tags,omitempty"`
+	Description     string                 `json:"description,omitempty" bson:"description,omitempty"`
+	Notes           string                 `json:"notes,omitempty" bson:"notes,omitempty"`
 	CustomFields    map[string]interface{} `json:"custom_fields,omitempty" bson:"custom_fields,omitempty"`
-	ConversionInfo  *ConversionInfo       `json:"conversion_info,omitempty" bson:"conversion_info,omitempty"`
-	DisqualifyInfo  *DisqualifyInfo       `json:"disqualify_info,omitempty" bson:"disqualify_info,omitempty"`
-	NextFollowUp    *time.Time            `json:"next_follow_up,omitempty" bson:"next_follow_up,omitempty"`
-	LastContactedAt *time.Time            `json:"last_contacted_at,omitempty" bson:"last_contacted_at,omitempty"`
-	CreatedBy       uuid.UUID             `json:"created_by" bson:"created_by"`
-	CreatedAt       time.Time             `json:"created_at" bson:"created_at"`
-	UpdatedAt       time.Time             `json:"updated_at" bson:"updated_at"`
-	DeletedAt       *time.Time            `json:"deleted_at,omitempty" bson:"deleted_at,omitempty"`
-	Version         int                   `json:"version" bson:"version"`
+	ConversionInfo  *ConversionInfo        `json:"conversion_info,omitempty" bson:"conversion_info,omitempty"`
+	DisqualifyInfo  *DisqualifyInfo        `json:"disqualify_info,omitempty" bson:"disqualify_info,omitempty"`
+	NextFollowUp    *time.Time             `json:"next_follow_up,omitempty" bson:"next_follow_up,omitempty"`
+	LastContactedAt *time.Time             `json:"last_contacted_at,omitempty" bson:"last_contacted_at,omitempty"`
+	CreatedBy       uuid.UUID              `json:"created_by" bson:"created_by"`
+	CreatedAt       time.Time              `json:"created_at" bson:"created_at"`
+	UpdatedAt       time.Time              `json:"updated_at" bson:"updated_at"`
+	DeletedAt       *time.Time             `json:"deleted_at,omitempty" bson:"deleted_at,omitempty"`
+	Version         int                    `json:"version" bson:"version"`
 
 	// Domain events
 	events []DomainEvent `json:"-" bson:"-"`
@@ -226,19 +227,19 @@ type Lead struct {
 
 // ConversionInfo contains information about lead conversion.
 type ConversionInfo struct {
-	ConvertedAt     time.Time  `json:"converted_at" bson:"converted_at"`
-	ConvertedBy     uuid.UUID  `json:"converted_by" bson:"converted_by"`
-	OpportunityID   uuid.UUID  `json:"opportunity_id" bson:"opportunity_id"`
-	CustomerID      *uuid.UUID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
-	ContactID       *uuid.UUID `json:"contact_id,omitempty" bson:"contact_id,omitempty"`
+	ConvertedAt   time.Time  `json:"converted_at" bson:"converted_at"`
+	ConvertedBy   uuid.UUID  `json:"converted_by" bson:"converted_by"`
+	OpportunityID uuid.UUID  `json:"opportunity_id" bson:"opportunity_id"`
+	CustomerID    *uuid.UUID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	ContactID     *uuid.UUID `json:"contact_id,omitempty" bson:"contact_id,omitempty"`
 }
 
 // DisqualifyInfo contains information about lead disqualification.
 type DisqualifyInfo struct {
-	DisqualifiedAt  time.Time `json:"disqualified_at" bson:"disqualified_at"`
-	DisqualifiedBy  uuid.UUID `json:"disqualified_by" bson:"disqualified_by"`
-	Reason          string    `json:"reason" bson:"reason"`
-	Notes           string    `json:"notes,omitempty" bson:"notes,omitempty"`
+	DisqualifiedAt time.Time `json:"disqualified_at" bson:"disqualified_at"`
+	DisqualifiedBy uuid.UUID `json:"disqualified_by" bson:"disqualified_by"`
+	Reason         string    `json:"reason" bson:"reason"`
+	Notes          string    `json:"notes,omitempty" bson:"notes,omitempty"`
 }
 
 // NewLead creates a new lead.
@@ -258,13 +259,13 @@ func NewLead(tenantID uuid.UUID, contact LeadContact, company LeadCompany, sourc
 
 	now := time.Now().UTC()
 	lead := &Lead{
-		ID:        uuid.New(),
-		TenantID:  tenantID,
-		Status:    LeadStatusNew,
-		Source:    source,
-		Rating:    LeadRatingCold,
-		Contact:   contact,
-		Company:   company,
+		ID:       uuid.New(),
+		TenantID: tenantID,
+		Status:   LeadStatusNew,
+		Source:   source,
+		Rating:   LeadRatingCold,
+		Contact:  contact,
+		Company:  company,
 		Score: LeadScore{
 			Score:          0,
 			LastCalculated: now,
@@ -405,6 +406,23 @@ func (l *Lead) ConvertToOpportunity(opportunityID uuid.UUID, convertedBy uuid.UU
 	l.UpdatedAt = now
 
 	l.AddEvent(NewLeadConvertedEvent(l, opportunityID))
+	return nil
+}
+
+// RevertConversion reverts a lead from converted status back to qualified.
+// This is used for saga compensation when the conversion workflow fails.
+func (l *Lead) RevertConversion() error {
+	if l.Status != LeadStatusConverted {
+		return ErrLeadNotConverted
+	}
+
+	now := time.Now().UTC()
+	l.Status = LeadStatusQualified
+	l.ConversionInfo = nil
+	l.UpdatedAt = now
+
+	// Note: We don't emit an event here as the original conversion event
+	// should be handled by the saga's event compensation mechanism
 	return nil
 }
 

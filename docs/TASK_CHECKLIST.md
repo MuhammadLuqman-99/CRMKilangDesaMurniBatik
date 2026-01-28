@@ -308,12 +308,24 @@
 - [x] Base types (Entity, AggregateRoot, DomainEvent interfaces)
 - [x] Domain errors (70+ error types: validation, delivery, template, channel-specific)
 
-### 5.2 Application Layer
-- [ ] SendEmail use case
-- [ ] SendSMS use case
-- [ ] SendInAppNotification use case
-- [ ] CreateTemplate use case
-- [ ] RetryFailedNotification use case
+### 5.2 Application Layer ✅ COMPLETED
+- [x] SendEmail use case (with template rendering, rate limiting, quota, scheduling)
+- [x] SendSMS use case (with suppression checking, template support)
+- [x] SendInAppNotification use case (with user validation, template localization)
+- [x] SendPushNotification use case (with device token handling)
+- [x] CreateTemplate use case (with channel-specific content, variables, localizations)
+- [x] UpdateTemplate use case (with content update, version tracking)
+- [x] PublishTemplate use case (with validation)
+- [x] CloneTemplate use case
+- [x] RenderTemplate use case (with locale support)
+- [x] ValidateTemplate use case
+- [x] RetryFailedNotification use case (with exponential backoff)
+- [x] CancelNotification use case
+- [x] GetNotification/ListNotifications use cases
+- [x] DTOs for Notification and Template (comprehensive request/response DTOs)
+- [x] Port interfaces (EmailProvider, SMSProvider, PushProvider, InAppProvider, etc.)
+- [x] Entity to DTO mappers (Notification and Template mappers)
+- [x] Application error handling with 80+ error codes
 
 ### 5.3 Infrastructure Layer
 - [ ] Email provider adapter
@@ -445,11 +457,11 @@
 | Phase 2 | 68 | 68 | ✅ 100% |
 | Phase 3 | 60 | 60 | ✅ 100% |
 | Phase 4 | 56 | 56 | ✅ 100% |
-| Phase 5 | 27 | 19 | 🔄 70% |
+| Phase 5 | 39 | 31 | 🔄 79% |
 | Phase 6 | 17 | 11 | ⏳ 65% |
 | Phase 7 | 19 | 0 | ⏳ 0% |
 | Phase 8 | 22 | 8 | ⏳ 36% |
-| **Total** | **291** | **244** | **84%** |
+| **Total** | **303** | **256** | **84%** |
 
 ---
 

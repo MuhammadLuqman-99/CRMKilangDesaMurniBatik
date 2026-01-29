@@ -42,7 +42,7 @@ func (m *CustomerMapper) ToResponse(customer *domain.Customer) *dto.CustomerResp
 		Website:         customer.Website.String(),
 		Addresses:       m.addressesToResponse(customer.Addresses),
 		SocialProfiles:  m.socialProfilesToResponse(customer.SocialProfiles),
-		CompanyInfo:     m.companyInfoToResponse(&customer.CompanyInfo),
+		CompanyInfo:     m.companyInfoToResponse(customer.CompanyInfo),
 		Financials:      m.financialsToResponse(&customer.Financials),
 		Preferences:     m.preferencesToResponse(&customer.Preferences),
 		Stats:           m.statsToResponse(&customer.Stats),
@@ -206,7 +206,7 @@ func (m *CustomerMapper) companyInfoToResponse(info *domain.CompanyInfo) *dto.Co
 
 	if info.AnnualRevenue != nil && info.AnnualRevenue.Amount > 0 {
 		response.AnnualRevenue = &dto.MoneyResponse{
-			Amount:   info.AnnualRevenue.Amount,
+			Amount:   info.AnnualRevenue.Float(),
 			Currency: info.AnnualRevenue.Currency,
 			Display:  info.AnnualRevenue.Display(),
 		}
@@ -230,7 +230,7 @@ func (m *CustomerMapper) financialsToResponse(financials *domain.CustomerFinanci
 
 	if financials.CreditLimit != nil {
 		response.CreditLimit = &dto.MoneyResponse{
-			Amount:   financials.CreditLimit.Amount,
+			Amount:   financials.CreditLimit.Float(),
 			Currency: financials.CreditLimit.Currency,
 			Display:  financials.CreditLimit.Display(),
 		}
@@ -238,7 +238,7 @@ func (m *CustomerMapper) financialsToResponse(financials *domain.CustomerFinanci
 
 	if financials.CurrentBalance != nil {
 		response.CurrentBalance = &dto.MoneyResponse{
-			Amount:   financials.CurrentBalance.Amount,
+			Amount:   financials.CurrentBalance.Float(),
 			Currency: financials.CurrentBalance.Currency,
 			Display:  financials.CurrentBalance.Display(),
 		}
@@ -246,7 +246,7 @@ func (m *CustomerMapper) financialsToResponse(financials *domain.CustomerFinanci
 
 	if financials.LifetimeValue != nil {
 		response.LifetimeValue = &dto.MoneyResponse{
-			Amount:   financials.LifetimeValue.Amount,
+			Amount:   financials.LifetimeValue.Float(),
 			Currency: financials.LifetimeValue.Currency,
 			Display:  financials.LifetimeValue.Display(),
 		}
@@ -254,7 +254,7 @@ func (m *CustomerMapper) financialsToResponse(financials *domain.CustomerFinanci
 
 	if financials.TotalSpent != nil {
 		response.TotalSpent = &dto.MoneyResponse{
-			Amount:   financials.TotalSpent.Amount,
+			Amount:   financials.TotalSpent.Float(),
 			Currency: financials.TotalSpent.Currency,
 			Display:  financials.TotalSpent.Display(),
 		}

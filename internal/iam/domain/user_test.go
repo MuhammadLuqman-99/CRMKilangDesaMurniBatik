@@ -527,7 +527,7 @@ func createTestUser(t *testing.T) *User {
 func createTestRole(t *testing.T) *Role {
 	t.Helper()
 	tenantID := uuid.New()
-	role, err := NewRole(tenantID, "Test Role", "Test role description")
+	role, err := NewRole(&tenantID, "Test Role", "Test role description", nil)
 	if err != nil {
 		t.Fatalf("Failed to create test role: %v", err)
 	}

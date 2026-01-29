@@ -308,7 +308,7 @@ func TestRole_AddPermissions(t *testing.T) {
 	tenantID := uuid.New()
 	role, _ := NewRole(&tenantID, "role", "Description", nil)
 
-	err := role.AddPermissions(PermissionUsersRead, PermissionUsersWrite, PermissionCustomersRead)
+	err := role.AddPermissions(PermissionUsersRead, PermissionUsersUpdate, PermissionCustomersRead)
 	if err != nil {
 		t.Fatalf("Role.AddPermissions() unexpected error = %v", err)
 	}
@@ -334,7 +334,7 @@ func TestRole_RemovePermission(t *testing.T) {
 	tenantID := uuid.New()
 	permissions := NewPermissionSet()
 	permissions.Add(PermissionUsersRead)
-	permissions.Add(PermissionUsersWrite)
+	permissions.Add(PermissionUsersUpdate)
 	role, _ := NewRole(&tenantID, "role", "Description", permissions)
 	role.ClearDomainEvents()
 
@@ -346,7 +346,7 @@ func TestRole_RemovePermission(t *testing.T) {
 	if role.HasPermission(PermissionUsersRead) {
 		t.Error("Role.RemovePermission() should remove permission")
 	}
-	if !role.HasPermission(PermissionUsersWrite) {
+	if !role.HasPermission(PermissionUsersUpdate) {
 		t.Error("Role.RemovePermission() should not affect other permissions")
 	}
 

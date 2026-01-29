@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"github.com/kilang-desa-murni/crm/internal/iam/application"
 	"github.com/kilang-desa-murni/crm/internal/iam/application/dto"
 	"github.com/kilang-desa-murni/crm/internal/iam/application/mapper"
@@ -230,7 +232,7 @@ func (uc *RegisterUserUseCase) RegisterUserWithTokens(ctx context.Context, req *
 
 // Helper functions
 
-func ptrUUID(id interface{}) *interface{} {
+func ptrUUID(id uuid.UUID) *uuid.UUID {
 	return &id
 }
 

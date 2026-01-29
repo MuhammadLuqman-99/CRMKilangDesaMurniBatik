@@ -345,7 +345,7 @@ func TestRefreshToken_Revoke(t *testing.T) {
 	if token.RevokedAt() == nil {
 		t.Error("RefreshToken.Revoke() should set RevokedAt")
 	}
-	if !token.IsValid() == true {
+	if token.IsValid() {
 		t.Error("RefreshToken.IsValid() should return false after revoke")
 	}
 

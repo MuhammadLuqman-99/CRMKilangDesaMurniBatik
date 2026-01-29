@@ -469,7 +469,7 @@ type PhoneNumber struct {
 
 // Phone number regex patterns
 var (
-	digitsOnlyRegex = regexp.MustCompile(`[^\d+]`)
+	digitsOnlyRegex = regexp.MustCompile(`[^\d]`)
 	phoneRegex      = regexp.MustCompile(`^\+?[1-9]\d{1,14}$`)
 )
 

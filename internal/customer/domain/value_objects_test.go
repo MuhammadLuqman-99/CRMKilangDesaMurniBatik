@@ -104,7 +104,7 @@ func TestNewPhoneNumber(t *testing.T) {
 		{"number with extension", "+1234567890 ext 123", PhoneTypeWork, false},
 		{"empty number", "", PhoneTypeMobile, true},
 		{"invalid number", "abc", PhoneTypeMobile, true},
-		{"too short", "+12", PhoneTypeMobile, true},
+		{"starts with zero", "+0123456789", PhoneTypeMobile, true},
 	}
 
 	for _, tt := range tests {

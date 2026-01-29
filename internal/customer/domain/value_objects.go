@@ -173,7 +173,7 @@ type PhoneNumber struct {
 
 // Phone number regex patterns
 var (
-	digitsOnlyRegex = regexp.MustCompile(`[^\d+]`)
+	digitsOnlyRegex = regexp.MustCompile(`[^\d]`)
 	phoneRegex      = regexp.MustCompile(`^\+?[1-9]\d{1,14}$`) // E.164 format
 )
 
@@ -334,6 +334,11 @@ func (p PhoneNumber) IsEmpty() bool {
 // Equals checks if two phone numbers are equal.
 func (p PhoneNumber) Equals(other PhoneNumber) bool {
 	return p.e164 == other.e164
+}
+
+// Formatted returns the formatted phone number.
+func (p PhoneNumber) Formatted() string {
+	return p.formatted
 }
 
 // MarshalJSON implements json.Marshaler.
@@ -552,6 +557,11 @@ func (a Address) Equals(other Address) bool {
 		a.CountryCode == other.CountryCode
 }
 
+// Format returns the formatted address string (alias for String).
+func (a Address) Format() string {
+	return a.String()
+}
+
 // ============================================================================
 // SocialProfile Value Object
 // ============================================================================
@@ -753,6 +763,11 @@ func (m Money) Float() float64 {
 // String returns formatted money string.
 func (m Money) String() string {
 	return fmt.Sprintf("%s %.2f", m.Currency, m.Float())
+}
+
+// Display returns a human-readable display string (alias for String).
+func (m Money) Display() string {
+	return m.String()
 }
 
 // Add adds two money values.

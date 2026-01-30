@@ -169,7 +169,7 @@ jobs:
 
       - name: Upload changelog
         if: steps.analyze.outputs.should_release == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: changelog
           path: changelog.md

@@ -10,6 +10,7 @@ import (
 
 	"github.com/kilang-desa-murni/crm/internal/customer/application"
 	"github.com/kilang-desa-murni/crm/internal/customer/application/dto"
+	"github.com/kilang-desa-murni/crm/internal/customer/application/mapper"
 	"github.com/kilang-desa-murni/crm/internal/customer/application/ports"
 	"github.com/kilang-desa-murni/crm/internal/customer/domain"
 )
@@ -27,18 +28,18 @@ type DeleteCustomerUseCase struct {
 
 // DeleteCustomerConfig holds configuration for customer deletion.
 type DeleteCustomerConfig struct {
-	AllowHardDelete        bool
-	RequireReason          bool
-	CheckActiveDeals       bool
+	AllowHardDelete         bool
+	RequireReason           bool
+	CheckActiveDeals        bool
 	CheckOutstandingBalance bool
 }
 
 // DefaultDeleteCustomerConfig returns default configuration.
 func DefaultDeleteCustomerConfig() DeleteCustomerConfig {
 	return DeleteCustomerConfig{
-		AllowHardDelete:        false,
-		RequireReason:          false,
-		CheckActiveDeals:       true,
+		AllowHardDelete:         false,
+		RequireReason:           false,
+		CheckActiveDeals:        true,
 		CheckOutstandingBalance: true,
 	}
 }
@@ -77,9 +78,9 @@ type DeleteCustomerInput struct {
 
 // DeleteCustomerOutput holds the result of customer deletion.
 type DeleteCustomerOutput struct {
-	Success    bool   `json:"success"`
+	Success    bool      `json:"success"`
 	CustomerID uuid.UUID `json:"customer_id"`
-	HardDelete bool   `json:"hard_delete"`
+	HardDelete bool      `json:"hard_delete"`
 }
 
 // Execute deletes a customer.
@@ -269,11 +270,11 @@ func NewBulkDeleteCustomersUseCase(
 
 // BulkDeleteInput holds input for bulk deletion.
 type BulkDeleteInput struct {
-	TenantID    uuid.UUID
-	UserID      uuid.UUID
-	Request     *dto.BulkDeleteRequest
-	IPAddress   string
-	UserAgent   string
+	TenantID  uuid.UUID
+	UserID    uuid.UUID
+	Request   *dto.BulkDeleteRequest
+	IPAddress string
+	UserAgent string
 }
 
 // Execute performs bulk deletion.

@@ -69,7 +69,7 @@ func (m *MockCustomerRepository) FindByID(ctx context.Context, id uuid.UUID) (*d
 	}
 	customer, ok := m.customers[id]
 	if !ok {
-		return nil, domain.NewNotFoundError("customer", id.String())
+		return nil, domain.ErrCustomerNotFound
 	}
 	return customer, nil
 }
@@ -801,13 +801,10 @@ func TestCreateCustomerUseCase_Execute_DuplicateDetection(t *testing.T) {
 	auditLogger := NewMockCustomerAuditLogger()
 
 	// Add a customer to be found as duplicate
-	existingCustomer := &domain.Customer{
-		ID:       duplicateDetector.matches[0].EntityID,
-		TenantID: uuid.New(),
-		Name:     "Existing Customer",
-	}
+	existingCustomer, _ := domain.NewCustomer(uuid.New(), "Existing Customer", domain.CustomerTypeCompany)
+	existingCustomer.BaseAggregateRoot.BaseEntity.ID = duplicateDetector.matches[0].EntityID
 	existingCustomer.Email, _ = domain.NewEmail("existing@example.com")
-	uow.customerRepo.customers[existingCustomer.ID] = existingCustomer
+	uow.customerRepo.customers[existingCustomer.BaseAggregateRoot.BaseEntity.ID] = existingCustomer
 
 	config := DefaultCreateCustomerConfig()
 	config.DuplicateCheckEnabled = true

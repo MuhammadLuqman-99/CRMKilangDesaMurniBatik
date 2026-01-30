@@ -97,43 +97,43 @@ type CustomerRepository interface {
 
 // CustomerFilter defines filtering options for customer queries.
 type CustomerFilter struct {
-	TenantID       *uuid.UUID       `json:"tenant_id,omitempty"`
-	IDs            []uuid.UUID      `json:"ids,omitempty"`
-	Codes          []string         `json:"codes,omitempty"`
-	Types          []CustomerType   `json:"types,omitempty"`
-	Statuses       []CustomerStatus `json:"statuses,omitempty"`
-	Tiers          []CustomerTier   `json:"tiers,omitempty"`
-	Sources        []CustomerSource `json:"sources,omitempty"`
-	Tags           []string         `json:"tags,omitempty"`
-	OwnerIDs       []uuid.UUID      `json:"owner_ids,omitempty"`
-	SegmentIDs     []uuid.UUID      `json:"segment_ids,omitempty"`
-	Industries     []Industry       `json:"industries,omitempty"`
-	Countries      []string         `json:"country_codes,omitempty"`
-	Query          string           `json:"query,omitempty"` // Full-text search
-	Email          string           `json:"email,omitempty"`
-	Phone          string           `json:"phone,omitempty"`
-	HasDeals       *bool            `json:"has_deals,omitempty"`
-	HasOpenDeals   *bool            `json:"has_open_deals,omitempty"`
-	CreatedAfter   *time.Time       `json:"created_after,omitempty"`
-	CreatedBefore  *time.Time       `json:"created_before,omitempty"`
-	UpdatedAfter   *time.Time       `json:"updated_after,omitempty"`
-	UpdatedBefore  *time.Time       `json:"updated_before,omitempty"`
-	LastContactAfter  *time.Time    `json:"last_contact_after,omitempty"`
-	LastContactBefore *time.Time    `json:"last_contact_before,omitempty"`
-	IncludeDeleted bool             `json:"include_deleted,omitempty"`
-	Offset         int              `json:"offset"`
-	Limit          int              `json:"limit"`
-	SortBy         string           `json:"sort_by,omitempty"`
-	SortOrder      string           `json:"sort_order,omitempty"` // "asc" or "desc"
+	TenantID          *uuid.UUID       `json:"tenant_id,omitempty"`
+	IDs               []uuid.UUID      `json:"ids,omitempty"`
+	Codes             []string         `json:"codes,omitempty"`
+	Types             []CustomerType   `json:"types,omitempty"`
+	Statuses          []CustomerStatus `json:"statuses,omitempty"`
+	Tiers             []CustomerTier   `json:"tiers,omitempty"`
+	Sources           []CustomerSource `json:"sources,omitempty"`
+	Tags              []string         `json:"tags,omitempty"`
+	OwnerIDs          []uuid.UUID      `json:"owner_ids,omitempty"`
+	SegmentIDs        []uuid.UUID      `json:"segment_ids,omitempty"`
+	Industries        []Industry       `json:"industries,omitempty"`
+	Countries         []string         `json:"country_codes,omitempty"`
+	Query             string           `json:"query,omitempty"` // Full-text search
+	Email             string           `json:"email,omitempty"`
+	Phone             string           `json:"phone,omitempty"`
+	HasDeals          *bool            `json:"has_deals,omitempty"`
+	HasOpenDeals      *bool            `json:"has_open_deals,omitempty"`
+	CreatedAfter      *time.Time       `json:"created_after,omitempty"`
+	CreatedBefore     *time.Time       `json:"created_before,omitempty"`
+	UpdatedAfter      *time.Time       `json:"updated_after,omitempty"`
+	UpdatedBefore     *time.Time       `json:"updated_before,omitempty"`
+	LastContactAfter  *time.Time       `json:"last_contact_after,omitempty"`
+	LastContactBefore *time.Time       `json:"last_contact_before,omitempty"`
+	IncludeDeleted    bool             `json:"include_deleted,omitempty"`
+	Offset            int              `json:"offset"`
+	Limit             int              `json:"limit"`
+	SortBy            string           `json:"sort_by,omitempty"`
+	SortOrder         string           `json:"sort_order,omitempty"` // "asc" or "desc"
 }
 
 // CustomerList represents a paginated list of customers.
 type CustomerList struct {
-	Customers  []*Customer `json:"customers"`
-	Total      int64       `json:"total"`
-	Offset     int         `json:"offset"`
-	Limit      int         `json:"limit"`
-	HasMore    bool        `json:"has_more"`
+	Customers []*Customer `json:"customers"`
+	Total     int64       `json:"total"`
+	Offset    int         `json:"offset"`
+	Limit     int         `json:"limit"`
+	HasMore   bool        `json:"has_more"`
 }
 
 // ContactRepository defines the interface for contact persistence.
@@ -218,15 +218,16 @@ type Note struct {
 	TenantID   uuid.UUID  `json:"tenant_id" bson:"tenant_id"`
 	Content    string     `json:"content" bson:"content"`
 	IsPinned   bool       `json:"is_pinned" bson:"is_pinned"`
+	Version    int        `json:"version" bson:"version"`
 	CreatedBy  *uuid.UUID `json:"created_by,omitempty" bson:"created_by,omitempty"`
 	UpdatedBy  *uuid.UUID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 }
 
 // NoteFilter defines filtering options for notes.
 type NoteFilter struct {
-	IsPinned *bool  `json:"is_pinned,omitempty"`
-	Offset   int    `json:"offset"`
-	Limit    int    `json:"limit"`
+	IsPinned *bool `json:"is_pinned,omitempty"`
+	Offset   int   `json:"offset"`
+	Limit    int   `json:"limit"`
 }
 
 // ActivityRepository defines the interface for customer activities.
@@ -262,19 +263,19 @@ type ActivityRepository interface {
 // Activity represents a customer activity.
 type Activity struct {
 	BaseEntity
-	CustomerID   uuid.UUID    `json:"customer_id" bson:"customer_id"`
-	ContactID    *uuid.UUID   `json:"contact_id,omitempty" bson:"contact_id,omitempty"`
-	TenantID     uuid.UUID    `json:"tenant_id" bson:"tenant_id"`
-	Type         ActivityType `json:"type" bson:"type"`
-	Subject      string       `json:"subject" bson:"subject"`
-	Description  string       `json:"description,omitempty" bson:"description,omitempty"`
-	OccurredAt   time.Time    `json:"occurred_at" bson:"occurred_at"`
-	Duration     *int         `json:"duration,omitempty" bson:"duration,omitempty"` // Minutes
-	Outcome      string       `json:"outcome,omitempty" bson:"outcome,omitempty"`
-	PerformedBy  *uuid.UUID   `json:"performed_by,omitempty" bson:"performed_by,omitempty"`
-	DealID       *uuid.UUID   `json:"deal_id,omitempty" bson:"deal_id,omitempty"`
-	LeadID       *uuid.UUID   `json:"lead_id,omitempty" bson:"lead_id,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
+	CustomerID  uuid.UUID              `json:"customer_id" bson:"customer_id"`
+	ContactID   *uuid.UUID             `json:"contact_id,omitempty" bson:"contact_id,omitempty"`
+	TenantID    uuid.UUID              `json:"tenant_id" bson:"tenant_id"`
+	Type        ActivityType           `json:"type" bson:"type"`
+	Subject     string                 `json:"subject" bson:"subject"`
+	Description string                 `json:"description,omitempty" bson:"description,omitempty"`
+	OccurredAt  time.Time              `json:"occurred_at" bson:"occurred_at"`
+	Duration    *int                   `json:"duration,omitempty" bson:"duration,omitempty"` // Minutes
+	Outcome     string                 `json:"outcome,omitempty" bson:"outcome,omitempty"`
+	PerformedBy *uuid.UUID             `json:"performed_by,omitempty" bson:"performed_by,omitempty"`
+	DealID      *uuid.UUID             `json:"deal_id,omitempty" bson:"deal_id,omitempty"`
+	LeadID      *uuid.UUID             `json:"lead_id,omitempty" bson:"lead_id,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 }
 
 // ActivityFilter defines filtering options for activities.
@@ -336,16 +337,16 @@ const (
 // Segment represents a customer segment.
 type Segment struct {
 	BaseEntity
-	TenantID      uuid.UUID                `json:"tenant_id" bson:"tenant_id"`
-	Name          string                   `json:"name" bson:"name"`
-	Description   string                   `json:"description,omitempty" bson:"description,omitempty"`
-	Type          SegmentType              `json:"type" bson:"type"`
-	Criteria      *SegmentCriteria         `json:"criteria,omitempty" bson:"criteria,omitempty"`
-	CustomerCount int64                    `json:"customer_count" bson:"customer_count"`
-	Color         string                   `json:"color,omitempty" bson:"color,omitempty"`
-	IsActive      bool                     `json:"is_active" bson:"is_active"`
-	CreatedBy     *uuid.UUID               `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	LastRefreshed *time.Time               `json:"last_refreshed,omitempty" bson:"last_refreshed,omitempty"`
+	TenantID      uuid.UUID        `json:"tenant_id" bson:"tenant_id"`
+	Name          string           `json:"name" bson:"name"`
+	Description   string           `json:"description,omitempty" bson:"description,omitempty"`
+	Type          SegmentType      `json:"type" bson:"type"`
+	Criteria      *SegmentCriteria `json:"criteria,omitempty" bson:"criteria,omitempty"`
+	CustomerCount int64            `json:"customer_count" bson:"customer_count"`
+	Color         string           `json:"color,omitempty" bson:"color,omitempty"`
+	IsActive      bool             `json:"is_active" bson:"is_active"`
+	CreatedBy     *uuid.UUID       `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	LastRefreshed *time.Time       `json:"last_refreshed,omitempty" bson:"last_refreshed,omitempty"`
 }
 
 // SegmentCriteria defines rules for dynamic segments.
@@ -396,45 +397,45 @@ const (
 // Import represents an import operation.
 type Import struct {
 	BaseEntity
-	TenantID      uuid.UUID    `json:"tenant_id" bson:"tenant_id"`
-	FileName      string       `json:"file_name" bson:"file_name"`
-	FileSize      int64        `json:"file_size" bson:"file_size"`
-	FileType      string       `json:"file_type" bson:"file_type"`
-	Status        ImportStatus `json:"status" bson:"status"`
-	TotalRows     int          `json:"total_rows" bson:"total_rows"`
-	ProcessedRows int          `json:"processed_rows" bson:"processed_rows"`
-	SuccessRows   int          `json:"success_rows" bson:"success_rows"`
-	FailedRows    int          `json:"failed_rows" bson:"failed_rows"`
-	DuplicateRows int          `json:"duplicate_rows" bson:"duplicate_rows"`
-	ErrorMessage  string       `json:"error_message,omitempty" bson:"error_message,omitempty"`
-	StartedAt     *time.Time   `json:"started_at,omitempty" bson:"started_at,omitempty"`
-	CompletedAt   *time.Time   `json:"completed_at,omitempty" bson:"completed_at,omitempty"`
-	CreatedBy     *uuid.UUID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	TenantID      uuid.UUID     `json:"tenant_id" bson:"tenant_id"`
+	FileName      string        `json:"file_name" bson:"file_name"`
+	FileSize      int64         `json:"file_size" bson:"file_size"`
+	FileType      string        `json:"file_type" bson:"file_type"`
+	Status        ImportStatus  `json:"status" bson:"status"`
+	TotalRows     int           `json:"total_rows" bson:"total_rows"`
+	ProcessedRows int           `json:"processed_rows" bson:"processed_rows"`
+	SuccessRows   int           `json:"success_rows" bson:"success_rows"`
+	FailedRows    int           `json:"failed_rows" bson:"failed_rows"`
+	DuplicateRows int           `json:"duplicate_rows" bson:"duplicate_rows"`
+	ErrorMessage  string        `json:"error_message,omitempty" bson:"error_message,omitempty"`
+	StartedAt     *time.Time    `json:"started_at,omitempty" bson:"started_at,omitempty"`
+	CompletedAt   *time.Time    `json:"completed_at,omitempty" bson:"completed_at,omitempty"`
+	CreatedBy     *uuid.UUID    `json:"created_by,omitempty" bson:"created_by,omitempty"`
 	Options       ImportOptions `json:"options" bson:"options"`
 }
 
 // ImportOptions defines import configuration.
 type ImportOptions struct {
-	SkipDuplicates   bool              `json:"skip_duplicates" bson:"skip_duplicates"`
-	UpdateExisting   bool              `json:"update_existing" bson:"update_existing"`
-	DefaultOwner     *uuid.UUID        `json:"default_owner,omitempty" bson:"default_owner,omitempty"`
-	DefaultStatus    CustomerStatus    `json:"default_status" bson:"default_status"`
-	DefaultType      CustomerType      `json:"default_type" bson:"default_type"`
-	DefaultSource    CustomerSource    `json:"default_source" bson:"default_source"`
-	DefaultTags      []string          `json:"default_tags,omitempty" bson:"default_tags,omitempty"`
-	FieldMapping     map[string]string `json:"field_mapping" bson:"field_mapping"`
+	SkipDuplicates bool              `json:"skip_duplicates" bson:"skip_duplicates"`
+	UpdateExisting bool              `json:"update_existing" bson:"update_existing"`
+	DefaultOwner   *uuid.UUID        `json:"default_owner,omitempty" bson:"default_owner,omitempty"`
+	DefaultStatus  CustomerStatus    `json:"default_status" bson:"default_status"`
+	DefaultType    CustomerType      `json:"default_type" bson:"default_type"`
+	DefaultSource  CustomerSource    `json:"default_source" bson:"default_source"`
+	DefaultTags    []string          `json:"default_tags,omitempty" bson:"default_tags,omitempty"`
+	FieldMapping   map[string]string `json:"field_mapping" bson:"field_mapping"`
 }
 
 // ImportError represents an import error.
 type ImportError struct {
 	BaseEntity
-	ImportID   uuid.UUID `json:"import_id" bson:"import_id"`
-	RowNumber  int       `json:"row_number" bson:"row_number"`
-	Field      string    `json:"field,omitempty" bson:"field,omitempty"`
-	Value      string    `json:"value,omitempty" bson:"value,omitempty"`
-	Error      string    `json:"error" bson:"error"`
-	ErrorCode  string    `json:"error_code" bson:"error_code"`
-	RawData    string    `json:"raw_data,omitempty" bson:"raw_data,omitempty"`
+	ImportID  uuid.UUID `json:"import_id" bson:"import_id"`
+	RowNumber int       `json:"row_number" bson:"row_number"`
+	Field     string    `json:"field,omitempty" bson:"field,omitempty"`
+	Value     string    `json:"value,omitempty" bson:"value,omitempty"`
+	Error     string    `json:"error" bson:"error"`
+	ErrorCode string    `json:"error_code" bson:"error_code"`
+	RawData   string    `json:"raw_data,omitempty" bson:"raw_data,omitempty"`
 }
 
 // OutboxRepository defines the interface for the transactional outbox pattern.
@@ -518,18 +519,18 @@ type ContactActivity struct {
 
 // ContactStats represents statistics about contacts.
 type ContactStats struct {
-	TotalContacts          int               `json:"total_contacts"`
-	ActiveContacts         int               `json:"active_contacts"`
-	InactiveContacts       int               `json:"inactive_contacts"`
-	BlockedContacts        int               `json:"blocked_contacts"`
-	PrimaryContacts        int               `json:"primary_contacts"`
-	MarketingOptInCount    int               `json:"marketing_opt_in_count"`
-	MarketingOptOutCount   int               `json:"marketing_opt_out_count"`
-	AvgEngagementScore     float64           `json:"avg_engagement_score"`
-	ContactsNeedingFollowUp int              `json:"contacts_needing_follow_up"`
-	RoleDistribution       map[string]int    `json:"role_distribution"`
-	DepartmentDistribution map[string]int    `json:"department_distribution"`
-	LastCalculatedAt       time.Time         `json:"last_calculated_at"`
+	TotalContacts           int            `json:"total_contacts"`
+	ActiveContacts          int            `json:"active_contacts"`
+	InactiveContacts        int            `json:"inactive_contacts"`
+	BlockedContacts         int            `json:"blocked_contacts"`
+	PrimaryContacts         int            `json:"primary_contacts"`
+	MarketingOptInCount     int            `json:"marketing_opt_in_count"`
+	MarketingOptOutCount    int            `json:"marketing_opt_out_count"`
+	AvgEngagementScore      float64        `json:"avg_engagement_score"`
+	ContactsNeedingFollowUp int            `json:"contacts_needing_follow_up"`
+	RoleDistribution        map[string]int `json:"role_distribution"`
+	DepartmentDistribution  map[string]int `json:"department_distribution"`
+	LastCalculatedAt        time.Time      `json:"last_calculated_at"`
 }
 
 // DuplicateContactMatch represents a potential duplicate contact match.

@@ -104,7 +104,7 @@ func (uc *UpdateCustomerUseCase) Execute(ctx context.Context, input UpdateCustom
 
 	// Update customer
 	if err := uc.uow.Customers().Update(txCtx, customer); err != nil {
-		if domain.IsVersionConflictError(err) {
+		if domain.IsConflictError(err) {
 			return nil, application.ErrCustomerVersionConflict(input.CustomerID, input.Request.Version, customer.Version)
 		}
 		return nil, application.ErrInternalError("failed to update customer", err)
@@ -276,23 +276,21 @@ func (uc *ChangeCustomerStatusUseCase) Execute(ctx context.Context, input Change
 	oldStatus := customer.Status
 
 	// Apply status change based on target status
-	var statusErr error
 	switch input.Request.Status {
 	case domain.CustomerStatusActive:
-		statusErr = customer.Activate()
+		if err := customer.Activate(); err != nil {
+			return nil, application.ErrCustomerInvalidStatus(string(oldStatus), string(input.Request.Status))
+		}
 	case domain.CustomerStatusInactive:
-		statusErr = customer.Deactivate()
+		customer.Deactivate()
 	case domain.CustomerStatusChurned:
-		statusErr = customer.MarkAsChurned(input.Request.Reason)
+		customer.MarkAsChurned(input.Request.Reason)
 	case domain.CustomerStatusBlocked:
-		statusErr = customer.Block(input.Request.Reason)
+		customer.Block(input.Request.Reason)
 	case domain.CustomerStatusProspect:
-		statusErr = customer.ConvertToProspect()
+		// Set status directly as ConvertToProspect is not available
+		customer.Status = domain.CustomerStatusProspect
 	default:
-		return nil, application.ErrCustomerInvalidStatus(string(oldStatus), string(input.Request.Status))
-	}
-
-	if statusErr != nil {
 		return nil, application.ErrCustomerInvalidStatus(string(oldStatus), string(input.Request.Status))
 	}
 

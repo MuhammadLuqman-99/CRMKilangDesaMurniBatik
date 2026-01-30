@@ -221,7 +221,7 @@ func (m *CustomerMapper) financialsToResponse(financials *domain.CustomerFinanci
 		PaymentTerms:       financials.PaymentTerms,
 		TaxExempt:          financials.TaxExempt,
 		TaxExemptionID:     financials.TaxExemptionID,
-		BillingEmail:       financials.BillingEmail.String(),
+		BillingEmail:       financials.BillingEmail,
 		DefaultDiscountPct: financials.DefaultDiscountPct,
 		LastPaymentAt:      financials.LastPaymentAt,
 		LastPurchaseAt:     financials.LastPurchaseAt,
@@ -294,7 +294,7 @@ func (m *CustomerMapper) statsToResponse(stats *domain.CustomerStats) dto.Custom
 
 	if stats.OpenDealValue != nil {
 		response.OpenDealValue = &dto.MoneyResponse{
-			Amount:   stats.OpenDealValue.Amount,
+			Amount:   stats.OpenDealValue.Float(),
 			Currency: stats.OpenDealValue.Currency,
 			Display:  stats.OpenDealValue.Display(),
 		}
@@ -302,7 +302,7 @@ func (m *CustomerMapper) statsToResponse(stats *domain.CustomerStats) dto.Custom
 
 	if stats.AvgDealSize != nil {
 		response.AvgDealSize = &dto.MoneyResponse{
-			Amount:   stats.AvgDealSize.Amount,
+			Amount:   stats.AvgDealSize.Float(),
 			Currency: stats.AvgDealSize.Currency,
 			Display:  stats.AvgDealSize.Display(),
 		}
@@ -364,7 +364,6 @@ func (m *CustomerMapper) ToDomain(tenantID, creatorID uuid.UUID, req *dto.Create
 			req.Address.PostalCode,
 			req.Address.CountryCode,
 			req.Address.AddressType,
-			req.Address.IsPrimary,
 		)
 	}
 
@@ -626,7 +625,7 @@ func MoneyInputToDomain(input *dto.MoneyInput) *domain.Money {
 	if input == nil {
 		return nil
 	}
-	money, _ := domain.NewMoney(input.Amount, input.Currency)
+	money, _ := domain.NewMoneyFromFloat(input.Amount, input.Currency)
 	return &money
 }
 
@@ -636,7 +635,7 @@ func MoneyToResponse(money *domain.Money) *dto.MoneyResponse {
 		return nil
 	}
 	return &dto.MoneyResponse{
-		Amount:   money.Amount,
+		Amount:   money.Float(),
 		Currency: money.Currency,
 		Display:  money.Display(),
 	}

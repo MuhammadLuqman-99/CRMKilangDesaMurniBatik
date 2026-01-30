@@ -46,32 +46,33 @@ const (
 // Contact represents a person associated with a customer.
 type Contact struct {
 	BaseEntity
-	CustomerID         uuid.UUID               `json:"customer_id" bson:"customer_id"`
-	TenantID           uuid.UUID               `json:"tenant_id" bson:"tenant_id"`
-	Name               PersonName              `json:"name" bson:"name"`
-	Email              Email                   `json:"email" bson:"email"`
-	PhoneNumbers       []PhoneNumber           `json:"phone_numbers" bson:"phone_numbers"`
-	Addresses          []Address               `json:"addresses,omitempty" bson:"addresses,omitempty"`
-	SocialProfiles     []SocialProfile         `json:"social_profiles,omitempty" bson:"social_profiles,omitempty"`
-	JobTitle           string                  `json:"job_title,omitempty" bson:"job_title,omitempty"`
-	Department         string                  `json:"department,omitempty" bson:"department,omitempty"`
-	Role               ContactRole             `json:"role" bson:"role"`
-	Status             ContactStatus           `json:"status" bson:"status"`
-	IsPrimary          bool                    `json:"is_primary" bson:"is_primary"`
-	ReportsTo          *uuid.UUID              `json:"reports_to,omitempty" bson:"reports_to,omitempty"`
-	CommPreference     CommunicationPreference `json:"comm_preference" bson:"comm_preference"`
-	OptedOutMarketing  bool                    `json:"opted_out_marketing" bson:"opted_out_marketing"`
-	MarketingConsent   *time.Time              `json:"marketing_consent,omitempty" bson:"marketing_consent,omitempty"`
-	Birthday           *time.Time              `json:"birthday,omitempty" bson:"birthday,omitempty"`
-	Notes              string                  `json:"notes,omitempty" bson:"notes,omitempty"`
-	Tags               []string                `json:"tags,omitempty" bson:"tags,omitempty"`
-	CustomFields       map[string]interface{}  `json:"custom_fields,omitempty" bson:"custom_fields,omitempty"`
-	AuditInfo          AuditInfo               `json:"audit_info" bson:"audit_info"`
-	LastContactedAt    *time.Time              `json:"last_contacted_at,omitempty" bson:"last_contacted_at,omitempty"`
-	NextFollowUpAt     *time.Time              `json:"next_follow_up_at,omitempty" bson:"next_follow_up_at,omitempty"`
-	EngagementScore    int                     `json:"engagement_score" bson:"engagement_score"`
-	LinkedInURL        string                  `json:"linkedin_url,omitempty" bson:"linkedin_url,omitempty"`
-	ProfilePhotoURL    string                  `json:"profile_photo_url,omitempty" bson:"profile_photo_url,omitempty"`
+	CustomerID        uuid.UUID               `json:"customer_id" bson:"customer_id"`
+	TenantID          uuid.UUID               `json:"tenant_id" bson:"tenant_id"`
+	Name              PersonName              `json:"name" bson:"name"`
+	Email             Email                   `json:"email" bson:"email"`
+	PhoneNumbers      []PhoneNumber           `json:"phone_numbers" bson:"phone_numbers"`
+	Addresses         []Address               `json:"addresses,omitempty" bson:"addresses,omitempty"`
+	SocialProfiles    []SocialProfile         `json:"social_profiles,omitempty" bson:"social_profiles,omitempty"`
+	JobTitle          string                  `json:"job_title,omitempty" bson:"job_title,omitempty"`
+	Department        string                  `json:"department,omitempty" bson:"department,omitempty"`
+	Role              ContactRole             `json:"role" bson:"role"`
+	Status            ContactStatus           `json:"status" bson:"status"`
+	IsPrimary         bool                    `json:"is_primary" bson:"is_primary"`
+	ReportsTo         *uuid.UUID              `json:"reports_to,omitempty" bson:"reports_to,omitempty"`
+	CommPreference    CommunicationPreference `json:"comm_preference" bson:"comm_preference"`
+	OptedOutMarketing bool                    `json:"opted_out_marketing" bson:"opted_out_marketing"`
+	MarketingConsent  *time.Time              `json:"marketing_consent,omitempty" bson:"marketing_consent,omitempty"`
+	Birthday          *time.Time              `json:"birthday,omitempty" bson:"birthday,omitempty"`
+	Notes             string                  `json:"notes,omitempty" bson:"notes,omitempty"`
+	Tags              []string                `json:"tags,omitempty" bson:"tags,omitempty"`
+	CustomFields      map[string]interface{}  `json:"custom_fields,omitempty" bson:"custom_fields,omitempty"`
+	AuditInfo         AuditInfo               `json:"audit_info" bson:"audit_info"`
+	LastContactedAt   *time.Time              `json:"last_contacted_at,omitempty" bson:"last_contacted_at,omitempty"`
+	NextFollowUpAt    *time.Time              `json:"next_follow_up_at,omitempty" bson:"next_follow_up_at,omitempty"`
+	EngagementScore   int                     `json:"engagement_score" bson:"engagement_score"`
+	LinkedInURL       string                  `json:"linkedin_url,omitempty" bson:"linkedin_url,omitempty"`
+	ProfilePhotoURL   string                  `json:"profile_photo_url,omitempty" bson:"profile_photo_url,omitempty"`
+	Version           int                     `json:"version" bson:"version"`
 }
 
 // ContactBuilder provides a fluent API for building Contact entities.
@@ -84,17 +85,18 @@ type ContactBuilder struct {
 func NewContactBuilder(customerID, tenantID uuid.UUID) *ContactBuilder {
 	return &ContactBuilder{
 		contact: Contact{
-			BaseEntity: NewBaseEntity(),
-			CustomerID: customerID,
-			TenantID:   tenantID,
-			Status:     ContactStatusActive,
-			Role:       ContactRoleOther,
+			BaseEntity:     NewBaseEntity(),
+			CustomerID:     customerID,
+			TenantID:       tenantID,
+			Status:         ContactStatusActive,
+			Role:           ContactRoleOther,
 			CommPreference: CommPrefEmail,
 			PhoneNumbers:   make([]PhoneNumber, 0),
 			Addresses:      make([]Address, 0),
 			SocialProfiles: make([]SocialProfile, 0),
 			Tags:           make([]string, 0),
 			CustomFields:   make(map[string]interface{}),
+			Version:        1,
 		},
 	}
 }
@@ -265,7 +267,18 @@ func NewContact(customerID, tenantID uuid.UUID, firstName, lastName, email strin
 // Contact Behaviors
 // ============================================================================
 
+// GetVersion returns the contact version for optimistic locking.
+func (c *Contact) GetVersion() int {
+	return c.Version
+}
+
+// IncrementVersion increments the contact version.
+func (c *Contact) IncrementVersion() {
+	c.Version++
+}
+
 // UpdateName updates the contact name.
+
 func (c *Contact) UpdateName(name PersonName) {
 	c.Name = name
 	c.MarkUpdated()

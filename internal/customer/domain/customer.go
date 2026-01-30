@@ -22,12 +22,12 @@ const (
 type CustomerStatus string
 
 const (
-	CustomerStatusLead      CustomerStatus = "lead"
-	CustomerStatusProspect  CustomerStatus = "prospect"
-	CustomerStatusActive    CustomerStatus = "active"
-	CustomerStatusInactive  CustomerStatus = "inactive"
-	CustomerStatusChurned   CustomerStatus = "churned"
-	CustomerStatusBlocked   CustomerStatus = "blocked"
+	CustomerStatusLead     CustomerStatus = "lead"
+	CustomerStatusProspect CustomerStatus = "prospect"
+	CustomerStatusActive   CustomerStatus = "active"
+	CustomerStatusInactive CustomerStatus = "inactive"
+	CustomerStatusChurned  CustomerStatus = "churned"
+	CustomerStatusBlocked  CustomerStatus = "blocked"
 )
 
 // CustomerTier represents the customer tier/segment.
@@ -46,48 +46,48 @@ const (
 type CustomerSource string
 
 const (
-	CustomerSourceDirect     CustomerSource = "direct"
-	CustomerSourceReferral   CustomerSource = "referral"
-	CustomerSourceWebsite    CustomerSource = "website"
+	CustomerSourceDirect      CustomerSource = "direct"
+	CustomerSourceReferral    CustomerSource = "referral"
+	CustomerSourceWebsite     CustomerSource = "website"
 	CustomerSourceSocialMedia CustomerSource = "social_media"
-	CustomerSourceEvent      CustomerSource = "event"
-	CustomerSourcePartner    CustomerSource = "partner"
-	CustomerSourceColdCall   CustomerSource = "cold_call"
-	CustomerSourceImport     CustomerSource = "import"
-	CustomerSourceOther      CustomerSource = "other"
+	CustomerSourceEvent       CustomerSource = "event"
+	CustomerSourcePartner     CustomerSource = "partner"
+	CustomerSourceColdCall    CustomerSource = "cold_call"
+	CustomerSourceImport      CustomerSource = "import"
+	CustomerSourceOther       CustomerSource = "other"
 )
 
 // Industry represents the customer's industry.
 type Industry string
 
 const (
-	IndustryTechnology    Industry = "technology"
-	IndustryFinance       Industry = "finance"
-	IndustryHealthcare    Industry = "healthcare"
-	IndustryManufacturing Industry = "manufacturing"
-	IndustryRetail        Industry = "retail"
-	IndustryEducation     Industry = "education"
-	IndustryGovernment    Industry = "government"
-	IndustryNonProfit     Industry = "non_profit"
-	IndustryRealEstate    Industry = "real_estate"
-	IndustryHospitality   Industry = "hospitality"
-	IndustryMedia         Industry = "media"
-	IndustryAgriculture   Industry = "agriculture"
-	IndustryConstruction  Industry = "construction"
+	IndustryTechnology     Industry = "technology"
+	IndustryFinance        Industry = "finance"
+	IndustryHealthcare     Industry = "healthcare"
+	IndustryManufacturing  Industry = "manufacturing"
+	IndustryRetail         Industry = "retail"
+	IndustryEducation      Industry = "education"
+	IndustryGovernment     Industry = "government"
+	IndustryNonProfit      Industry = "non_profit"
+	IndustryRealEstate     Industry = "real_estate"
+	IndustryHospitality    Industry = "hospitality"
+	IndustryMedia          Industry = "media"
+	IndustryAgriculture    Industry = "agriculture"
+	IndustryConstruction   Industry = "construction"
 	IndustryTransportation Industry = "transportation"
-	IndustryOther         Industry = "other"
+	IndustryOther          Industry = "other"
 )
 
 // CompanySize represents the size of a company.
 type CompanySize string
 
 const (
-	CompanySizeSolo       CompanySize = "solo"        // 1 person
-	CompanySizeMicro      CompanySize = "micro"       // 2-10
-	CompanySizeSmall      CompanySize = "small"       // 11-50
-	CompanySizeMedium     CompanySize = "medium"      // 51-200
-	CompanySizeLarge      CompanySize = "large"       // 201-1000
-	CompanySizeEnterprise CompanySize = "enterprise"  // 1000+
+	CompanySizeSolo       CompanySize = "solo"       // 1 person
+	CompanySizeMicro      CompanySize = "micro"      // 2-10
+	CompanySizeSmall      CompanySize = "small"      // 11-50
+	CompanySizeMedium     CompanySize = "medium"     // 51-200
+	CompanySizeLarge      CompanySize = "large"      // 201-1000
+	CompanySizeEnterprise CompanySize = "enterprise" // 1000+
 )
 
 // CompanyInfo holds company-specific information.
@@ -124,15 +124,15 @@ type CustomerFinancials struct {
 
 // CustomerPreferences holds customer preferences.
 type CustomerPreferences struct {
-	Language           string                  `json:"language" bson:"language"`
-	Timezone           string                  `json:"timezone" bson:"timezone"`
-	Currency           Currency                `json:"currency" bson:"currency"`
-	DateFormat         string                  `json:"date_format" bson:"date_format"`
-	CommPreference     CommunicationPreference `json:"comm_preference" bson:"comm_preference"`
-	OptedOutMarketing  bool                    `json:"opted_out_marketing" bson:"opted_out_marketing"`
-	MarketingConsent   *time.Time              `json:"marketing_consent,omitempty" bson:"marketing_consent,omitempty"`
-	NewsletterOptIn    bool                    `json:"newsletter_opt_in" bson:"newsletter_opt_in"`
-	SMSOptIn           bool                    `json:"sms_opt_in" bson:"sms_opt_in"`
+	Language          string                  `json:"language" bson:"language"`
+	Timezone          string                  `json:"timezone" bson:"timezone"`
+	Currency          Currency                `json:"currency" bson:"currency"`
+	DateFormat        string                  `json:"date_format" bson:"date_format"`
+	CommPreference    CommunicationPreference `json:"comm_preference" bson:"comm_preference"`
+	OptedOutMarketing bool                    `json:"opted_out_marketing" bson:"opted_out_marketing"`
+	MarketingConsent  *time.Time              `json:"marketing_consent,omitempty" bson:"marketing_consent,omitempty"`
+	NewsletterOptIn   bool                    `json:"newsletter_opt_in" bson:"newsletter_opt_in"`
+	SMSOptIn          bool                    `json:"sms_opt_in" bson:"sms_opt_in"`
 }
 
 // CustomerStats holds computed statistics.
@@ -155,38 +155,38 @@ type CustomerStats struct {
 // Customer is the aggregate root for customer management.
 type Customer struct {
 	BaseAggregateRoot
-	TenantID           uuid.UUID           `json:"tenant_id" bson:"tenant_id"`
-	Code               string              `json:"code" bson:"code"` // Unique customer code
-	Name               string              `json:"name" bson:"name"`
-	Type               CustomerType        `json:"type" bson:"type"`
-	Status             CustomerStatus      `json:"status" bson:"status"`
-	Tier               CustomerTier        `json:"tier" bson:"tier"`
-	Source             CustomerSource      `json:"source" bson:"source"`
-	Email              Email               `json:"email" bson:"email"`
-	PhoneNumbers       []PhoneNumber       `json:"phone_numbers" bson:"phone_numbers"`
-	Website            Website             `json:"website,omitempty" bson:"website,omitempty"`
-	Addresses          []Address           `json:"addresses" bson:"addresses"`
-	SocialProfiles     []SocialProfile     `json:"social_profiles,omitempty" bson:"social_profiles,omitempty"`
-	CompanyInfo        *CompanyInfo        `json:"company_info,omitempty" bson:"company_info,omitempty"`
-	Financials         CustomerFinancials  `json:"financials" bson:"financials"`
-	Preferences        CustomerPreferences `json:"preferences" bson:"preferences"`
-	Stats              CustomerStats       `json:"stats" bson:"stats"`
-	Contacts           []Contact           `json:"contacts" bson:"contacts"`
-	OwnerID            *uuid.UUID          `json:"owner_id,omitempty" bson:"owner_id,omitempty"` // Sales owner
-	AssignedTeam       []uuid.UUID         `json:"assigned_team,omitempty" bson:"assigned_team,omitempty"`
-	ReferredBy         *uuid.UUID          `json:"referred_by,omitempty" bson:"referred_by,omitempty"`
-	Tags               []string            `json:"tags" bson:"tags"`
-	Segments           []uuid.UUID         `json:"segments,omitempty" bson:"segments,omitempty"`
-	CustomFields       map[string]interface{} `json:"custom_fields,omitempty" bson:"custom_fields,omitempty"`
-	Notes              string              `json:"notes,omitempty" bson:"notes,omitempty"`
-	LogoURL            string              `json:"logo_url,omitempty" bson:"logo_url,omitempty"`
-	AuditInfo          AuditInfo           `json:"audit_info" bson:"audit_info"`
-	Metadata           Metadata            `json:"metadata" bson:"metadata"`
-	LastContactedAt    *time.Time          `json:"last_contacted_at,omitempty" bson:"last_contacted_at,omitempty"`
-	NextFollowUpAt     *time.Time          `json:"next_follow_up_at,omitempty" bson:"next_follow_up_at,omitempty"`
-	ConvertedAt        *time.Time          `json:"converted_at,omitempty" bson:"converted_at,omitempty"`
-	ChurnedAt          *time.Time          `json:"churned_at,omitempty" bson:"churned_at,omitempty"`
-	ChurnReason        string              `json:"churn_reason,omitempty" bson:"churn_reason,omitempty"`
+	TenantID        uuid.UUID              `json:"tenant_id" bson:"tenant_id"`
+	Code            string                 `json:"code" bson:"code"` // Unique customer code
+	Name            string                 `json:"name" bson:"name"`
+	Type            CustomerType           `json:"type" bson:"type"`
+	Status          CustomerStatus         `json:"status" bson:"status"`
+	Tier            CustomerTier           `json:"tier" bson:"tier"`
+	Source          CustomerSource         `json:"source" bson:"source"`
+	Email           Email                  `json:"email" bson:"email"`
+	PhoneNumbers    []PhoneNumber          `json:"phone_numbers" bson:"phone_numbers"`
+	Website         Website                `json:"website,omitempty" bson:"website,omitempty"`
+	Addresses       []Address              `json:"addresses" bson:"addresses"`
+	SocialProfiles  []SocialProfile        `json:"social_profiles,omitempty" bson:"social_profiles,omitempty"`
+	CompanyInfo     *CompanyInfo           `json:"company_info,omitempty" bson:"company_info,omitempty"`
+	Financials      CustomerFinancials     `json:"financials" bson:"financials"`
+	Preferences     CustomerPreferences    `json:"preferences" bson:"preferences"`
+	Stats           CustomerStats          `json:"stats" bson:"stats"`
+	Contacts        []Contact              `json:"contacts" bson:"contacts"`
+	OwnerID         *uuid.UUID             `json:"owner_id,omitempty" bson:"owner_id,omitempty"` // Sales owner
+	AssignedTeam    []uuid.UUID            `json:"assigned_team,omitempty" bson:"assigned_team,omitempty"`
+	ReferredBy      *uuid.UUID             `json:"referred_by,omitempty" bson:"referred_by,omitempty"`
+	Tags            []string               `json:"tags" bson:"tags"`
+	Segments        []uuid.UUID            `json:"segments,omitempty" bson:"segments,omitempty"`
+	CustomFields    map[string]interface{} `json:"custom_fields,omitempty" bson:"custom_fields,omitempty"`
+	Notes           string                 `json:"notes,omitempty" bson:"notes,omitempty"`
+	LogoURL         string                 `json:"logo_url,omitempty" bson:"logo_url,omitempty"`
+	AuditInfo       AuditInfo              `json:"audit_info" bson:"audit_info"`
+	Metadata        Metadata               `json:"metadata" bson:"metadata"`
+	LastContactedAt *time.Time             `json:"last_contacted_at,omitempty" bson:"last_contacted_at,omitempty"`
+	NextFollowUpAt  *time.Time             `json:"next_follow_up_at,omitempty" bson:"next_follow_up_at,omitempty"`
+	ConvertedAt     *time.Time             `json:"converted_at,omitempty" bson:"converted_at,omitempty"`
+	ChurnedAt       *time.Time             `json:"churned_at,omitempty" bson:"churned_at,omitempty"`
+	ChurnReason     string                 `json:"churn_reason,omitempty" bson:"churn_reason,omitempty"`
 }
 
 // MaxContacts is the maximum number of contacts per customer.
@@ -441,6 +441,88 @@ func (c *Customer) UpdateEmail(email Email) {
 	}))
 }
 
+// UpdateName updates the customer name.
+func (c *Customer) UpdateName(name string) {
+	name = strings.TrimSpace(name)
+	if name == "" || name == c.Name {
+		return
+	}
+	oldName := c.Name
+	c.Name = name
+	c.MarkUpdated()
+	c.IncrementVersion()
+
+	c.AddDomainEvent(NewCustomerUpdatedEvent(c, map[string]interface{}{
+		"name": map[string]string{"old": oldName, "new": name},
+	}))
+}
+
+// UpdateType updates the customer type.
+func (c *Customer) UpdateType(customerType CustomerType) {
+	if customerType == c.Type {
+		return
+	}
+	c.Type = customerType
+	c.MarkUpdated()
+	c.IncrementVersion()
+}
+
+// UpdateWebsite updates the customer website.
+func (c *Customer) UpdateWebsite(website Website) {
+	c.Website = website
+	c.MarkUpdated()
+	c.IncrementVersion()
+}
+
+// UpdateSource updates the customer source.
+func (c *Customer) UpdateSource(source CustomerSource) {
+	if source == c.Source {
+		return
+	}
+	c.Source = source
+	c.MarkUpdated()
+	c.IncrementVersion()
+}
+
+// UpdateTier updates the customer tier.
+func (c *Customer) UpdateTier(tier CustomerTier) {
+	if tier == c.Tier {
+		return
+	}
+	oldTier := c.Tier
+	c.Tier = tier
+	c.MarkUpdated()
+	c.IncrementVersion()
+
+	c.AddDomainEvent(NewCustomerTierChangedEvent(c, oldTier, tier))
+}
+
+// UpdateNotes updates the customer notes.
+func (c *Customer) UpdateNotes(notes string) {
+	c.Notes = strings.TrimSpace(notes)
+	c.MarkUpdated()
+	c.IncrementVersion()
+}
+
+// UpdateCompanyInfo updates the company information.
+func (c *Customer) UpdateCompanyInfo(info CompanyInfo) {
+	c.CompanyInfo = &info
+	c.MarkUpdated()
+	c.IncrementVersion()
+}
+
+// UpdatePreferences updates the customer preferences.
+func (c *Customer) UpdatePreferences(prefs CustomerPreferences) {
+	c.Preferences = prefs
+	c.MarkUpdated()
+	c.IncrementVersion()
+}
+
+// AddPhoneNumber adds a phone number (alias for AddPhone).
+func (c *Customer) AddPhoneNumber(phone PhoneNumber) {
+	c.AddPhone(phone)
+}
+
 // AddPhone adds a phone number.
 func (c *Customer) AddPhone(phone PhoneNumber) {
 	if phone.IsPrimary() {
@@ -613,6 +695,11 @@ func (c *Customer) GetContact(contactID uuid.UUID) *Contact {
 		}
 	}
 	return nil
+}
+
+// GetContactByID is an alias for GetContact.
+func (c *Customer) GetContactByID(contactID uuid.UUID) *Contact {
+	return c.GetContact(contactID)
 }
 
 // GetPrimaryContact returns the primary contact.
@@ -883,6 +970,16 @@ func (c *Customer) HasTag(tag string) bool {
 	return false
 }
 
+// SetCustomField sets a custom field value.
+func (c *Customer) SetCustomField(key string, value interface{}) {
+	if c.CustomFields == nil {
+		c.CustomFields = make(map[string]interface{})
+	}
+	c.CustomFields[key] = value
+	c.MarkUpdated()
+	c.IncrementVersion()
+}
+
 // AddToSegment adds to a segment.
 func (c *Customer) AddToSegment(segmentID uuid.UUID) {
 	for _, id := range c.Segments {
@@ -1058,6 +1155,14 @@ func (c *Customer) DaysSinceLastContact() int {
 func (c *Customer) Delete(deletedBy uuid.UUID) {
 	c.MarkDeleted()
 	c.AuditInfo.SetDeletedBy(deletedBy)
+	c.IncrementVersion()
+
+	c.AddDomainEvent(NewCustomerDeletedEvent(c))
+}
+
+// SoftDelete marks the customer as deleted without requiring a user ID.
+func (c *Customer) SoftDelete() {
+	c.MarkDeleted()
 	c.IncrementVersion()
 
 	c.AddDomainEvent(NewCustomerDeletedEvent(c))

@@ -72,6 +72,11 @@ func (a *BaseAggregateRoot) GetDomainEvents() []DomainEvent {
 	return a.domainEvents
 }
 
+// DomainEvents returns all pending domain events (alias for GetDomainEvents).
+func (a *BaseAggregateRoot) DomainEvents() []DomainEvent {
+	return a.domainEvents
+}
+
 // ClearDomainEvents clears all pending domain events.
 func (a *BaseAggregateRoot) ClearDomainEvents() {
 	a.domainEvents = nil
@@ -123,6 +128,7 @@ func NewBaseAggregateRoot() BaseAggregateRoot {
 
 // DomainEvent is the base interface for all domain events.
 type DomainEvent interface {
+	EventID() uuid.UUID
 	EventType() string
 	OccurredAt() time.Time
 	AggregateID() uuid.UUID
@@ -133,12 +139,18 @@ type DomainEvent interface {
 
 // BaseDomainEvent provides common fields for domain events.
 type BaseDomainEvent struct {
+	eventID       uuid.UUID
 	eventType     string
 	occurredAt    time.Time
 	aggregateID   uuid.UUID
 	aggregateType string
 	tenantID      uuid.UUID
 	version       int
+}
+
+// EventID returns the event ID.
+func (e *BaseDomainEvent) EventID() uuid.UUID {
+	return e.eventID
 }
 
 // EventType returns the event type.
@@ -174,6 +186,7 @@ func (e *BaseDomainEvent) Version() int {
 // NewBaseDomainEvent creates a new base domain event.
 func NewBaseDomainEvent(eventType string, aggregateID uuid.UUID, aggregateType string, tenantID uuid.UUID, version int) BaseDomainEvent {
 	return BaseDomainEvent{
+		eventID:       uuid.New(),
 		eventType:     eventType,
 		occurredAt:    time.Now().UTC(),
 		aggregateID:   aggregateID,

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/kilang-desa-murni/crm/internal/customer/application/ports"
@@ -30,38 +31,38 @@ const (
 
 // RabbitMQConfig holds RabbitMQ configuration.
 type RabbitMQConfig struct {
-	URL              string
-	Exchange         string
-	ExchangeType     string
-	Durable          bool
-	AutoDelete       bool
-	DeliveryMode     uint8
-	ContentType      string
-	ReconnectDelay   time.Duration
+	URL               string
+	Exchange          string
+	ExchangeType      string
+	Durable           bool
+	AutoDelete        bool
+	DeliveryMode      uint8
+	ContentType       string
+	ReconnectDelay    time.Duration
 	MaxReconnectTries int
 }
 
 // DefaultRabbitMQConfig returns default RabbitMQ configuration.
 func DefaultRabbitMQConfig() RabbitMQConfig {
 	return RabbitMQConfig{
-		Exchange:         CustomerEventsExchange,
-		ExchangeType:     "topic",
-		Durable:          true,
-		AutoDelete:       false,
-		DeliveryMode:     amqp.Persistent,
-		ContentType:      "application/json",
-		ReconnectDelay:   5 * time.Second,
+		Exchange:          CustomerEventsExchange,
+		ExchangeType:      "topic",
+		Durable:           true,
+		AutoDelete:        false,
+		DeliveryMode:      amqp.Persistent,
+		ContentType:       "application/json",
+		ReconnectDelay:    5 * time.Second,
 		MaxReconnectTries: 10,
 	}
 }
 
 // RabbitMQPublisher implements ports.EventPublisher using RabbitMQ.
 type RabbitMQPublisher struct {
-	config     RabbitMQConfig
-	conn       *amqp.Connection
-	channel    *amqp.Channel
-	mu         sync.RWMutex
-	closed     bool
+	config      RabbitMQConfig
+	conn        *amqp.Connection
+	channel     *amqp.Channel
+	mu          sync.RWMutex
+	closed      bool
 	notifyClose chan *amqp.Error
 }
 
@@ -369,15 +370,21 @@ func (p *OutboxProcessor) processEntries(ctx context.Context) {
 
 // outboxEvent implements domain.DomainEvent for outbox entries.
 type outboxEvent struct {
-	id          interface{}
-	eventType   string
-	aggregateID interface{}
-	payload     []byte
-	occurredAt  time.Time
+	id            uuid.UUID
+	eventType     string
+	aggregateID   uuid.UUID
+	aggregateType string
+	tenantID      uuid.UUID
+	version       int
+	payload       []byte
+	occurredAt    time.Time
 }
 
-func (e *outboxEvent) EventID() interface{}      { return e.id }
-func (e *outboxEvent) EventType() string         { return e.eventType }
-func (e *outboxEvent) AggregateID() interface{}  { return e.aggregateID }
-func (e *outboxEvent) OccurredAt() time.Time     { return e.occurredAt }
+func (e *outboxEvent) EventID() uuid.UUID           { return e.id }
+func (e *outboxEvent) EventType() string            { return e.eventType }
+func (e *outboxEvent) AggregateID() uuid.UUID       { return e.aggregateID }
+func (e *outboxEvent) AggregateType() string        { return e.aggregateType }
+func (e *outboxEvent) TenantID() uuid.UUID          { return e.tenantID }
+func (e *outboxEvent) Version() int                 { return e.version }
+func (e *outboxEvent) OccurredAt() time.Time        { return e.occurredAt }
 func (e *outboxEvent) MarshalJSON() ([]byte, error) { return e.payload, nil }

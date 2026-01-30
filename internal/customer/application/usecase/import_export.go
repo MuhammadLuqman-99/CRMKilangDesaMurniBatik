@@ -97,15 +97,15 @@ type ImportCustomersInput struct {
 
 // ImportCustomersOutput holds the result of customer import.
 type ImportCustomersOutput struct {
-	ImportID     uuid.UUID                  `json:"import_id"`
-	TotalRows    int                        `json:"total_rows"`
-	SuccessCount int                        `json:"success_count"`
-	FailureCount int                        `json:"failure_count"`
-	SkippedCount int                        `json:"skipped_count"`
-	UpdatedCount int                        `json:"updated_count"`
-	Results      []ImportRowResult          `json:"results,omitempty"`
-	Errors       []string                   `json:"errors,omitempty"`
-	Duration     time.Duration              `json:"duration"`
+	ImportID     uuid.UUID         `json:"import_id"`
+	TotalRows    int               `json:"total_rows"`
+	SuccessCount int               `json:"success_count"`
+	FailureCount int               `json:"failure_count"`
+	SkippedCount int               `json:"skipped_count"`
+	UpdatedCount int               `json:"updated_count"`
+	Results      []ImportRowResult `json:"results,omitempty"`
+	Errors       []string          `json:"errors,omitempty"`
+	Duration     time.Duration     `json:"duration"`
 }
 
 // ImportRowResult represents the result of importing a single row.
@@ -395,7 +395,6 @@ func (uc *ImportCustomersUseCase) createFromImportRow(input ImportCustomersInput
 			row.Address.PostalCode,
 			row.Address.CountryCode,
 			domain.AddressTypeOffice,
-			true,
 		)
 	}
 	if row.CompanyInfo.LegalName != "" {
@@ -513,10 +512,10 @@ type ExportCustomersInput struct {
 
 // ExportCustomersOutput holds the result of customer export.
 type ExportCustomersOutput struct {
-	Data        []byte    `json:"-"`
-	FileName    string    `json:"file_name"`
-	ContentType string    `json:"content_type"`
-	TotalRows   int       `json:"total_rows"`
+	Data        []byte `json:"-"`
+	FileName    string `json:"file_name"`
+	ContentType string `json:"content_type"`
+	TotalRows   int    `json:"total_rows"`
 }
 
 // Execute exports customers to a file.

@@ -1,0 +1,248 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-resource-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: alerting
+data:
+  resource-alerts.yaml: |
+    groups:
+      - name: resource-cpu
+        interval: 30s
+        rules:
+          # CPU alerts
+          - alert: HighCPUUsage
+            expr: |
+              (
+                sum(rate(container_cpu_usage_seconds_total{
+                  namespace="crm",
+                  container!=""
+                }[5m])) by (pod, container)
+                /
+                sum(kube_pod_container_resource_limits{
+                  namespace="crm",
+                  resource="cpu"
+                }) by (pod, container)
+              ) * 100 > 80
+            for: 10m
+            labels:
+              severity: warning
+              category: resources
+            annotations:
+              summary: "High CPU usage for {{ $labels.pod }}/{{ $labels.container }}"
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ printf \"%.2f\" $value }}% of CPU limit."
+
+          - alert: CriticalCPUUsage
+            expr: |
+              (
+                sum(rate(container_cpu_usage_seconds_total{
+                  namespace="crm",
+                  container!=""
+                }[5m])) by (pod, container)
+                /
+                sum(kube_pod_container_resource_limits{
+                  namespace="crm",
+                  resource="cpu"
+                }) by (pod, container)
+              ) * 100 > 95
+            for: 5m
+            labels:
+              severity: critical
+              category: resources
+            annotations:
+              summary: "Critical CPU usage for {{ $labels.pod }}/{{ $labels.container }}"
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ printf \"%.2f\" $value }}% of CPU limit, may be throttled."
+
+          - alert: CPUThrottling
+            expr: |
+              sum(rate(container_cpu_cfs_throttled_seconds_total{
+                namespace="crm"
+              }[5m])) by (pod, container) > 0.5
+            for: 5m
+            labels:
+              severity: warning
+              category: resources
+            annotations:
+              summary: "CPU throttling detected for {{ $labels.pod }}/{{ $labels.container }}"
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is being CPU throttled."
+
+      - name: resource-memory
+        interval: 30s
+        rules:
+          # Memory alerts
+          - alert: HighMemoryUsage
+            expr: |
+              (
+                sum(container_memory_working_set_bytes{
+                  namespace="crm",
+                  container!=""
+                }) by (pod, container)
+                /
+                sum(kube_pod_container_resource_limits{
+                  namespace="crm",
+                  resource="memory"
+                }) by (pod, container)
+              ) * 100 > 80
+            for: 10m
+            labels:
+              severity: warning
+              category: resources
+            annotations:
+              summary: "High memory usage for {{ $labels.pod }}/{{ $labels.container }}"
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ printf \"%.2f\" $value }}% of memory limit."
+
+          - alert: CriticalMemoryUsage
+            expr: |
+              (
+                sum(container_memory_working_set_bytes{
+                  namespace="crm",
+                  container!=""
+                }) by (pod, container)
+                /
+                sum(kube_pod_container_resource_limits{
+                  namespace="crm",
+                  resource="memory"
+                }) by (pod, container)
+              ) * 100 > 95
+            for: 2m
+            labels:
+              severity: critical
+              category: resources
+            annotations:
+              summary: "Critical memory usage for {{ $labels.pod }}/{{ $labels.container }}"
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ printf \"%.2f\" $value }}% of memory limit, OOMKill risk."
+
+          - alert: MemoryLeakSuspected
+            expr: |
+              (
+                delta(container_memory_working_set_bytes{
+                  namespace="crm",
+                  container!=""
+                }[1h]) > 0
+              )
+              and
+              (
+                container_memory_working_set_bytes{
+                  namespace="crm",
+                  container!=""
+                }
+                /
+                kube_pod_container_resource_limits{
+                  namespace="crm",
+                  resource="memory"
+                }
+              ) > 0.5
+            for: 2h
+            labels:
+              severity: warning
+              category: resources
+            annotations:
+              summary: "Possible memory leak in {{ $labels.pod }}/{{ $labels.container }}"
+              description: "Memory usage for {{ $labels.container }} in {{ $labels.pod }} has been continuously increasing for 2 hours."
+
+          - alert: OOMKillDetected
+            expr: |
+              increase(kube_pod_container_status_restarts_total{
+                namespace="crm",
+                reason="OOMKilled"
+              }[1h]) > 0
+            labels:
+              severity: critical
+              category: resources
+            annotations:
+              summary: "OOMKill detected for {{ $labels.pod }}/{{ $labels.container }}"
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} was OOMKilled. Review memory limits and usage."
+
+      - name: resource-disk
+        interval: 60s
+        rules:
+          # Disk/PVC alerts
+          - alert: PVCHighUsage
+            expr: |
+              (
+                kubelet_volume_stats_used_bytes{namespace="crm"}
+                /
+                kubelet_volume_stats_capacity_bytes{namespace="crm"}
+              ) * 100 > 80
+            for: 5m
+            labels:
+              severity: warning
+              category: storage
+            annotations:
+              summary: "High PVC usage for {{ $labels.persistentvolumeclaim }}"
+              description: "PVC {{ $labels.persistentvolumeclaim }} is {{ printf \"%.2f\" $value }}% full."
+
+          - alert: PVCCriticalUsage
+            expr: |
+              (
+                kubelet_volume_stats_used_bytes{namespace="crm"}
+                /
+                kubelet_volume_stats_capacity_bytes{namespace="crm"}
+              ) * 100 > 95
+            for: 2m
+            labels:
+              severity: critical
+              category: storage
+            annotations:
+              summary: "Critical PVC usage for {{ $labels.persistentvolumeclaim }}"
+              description: "PVC {{ $labels.persistentvolumeclaim }} is {{ printf \"%.2f\" $value }}% full, immediate action required."
+
+          - alert: PVCGrowthRate
+            expr: |
+              predict_linear(
+                kubelet_volume_stats_used_bytes{namespace="crm"}[6h], 24*60*60
+              ) > kubelet_volume_stats_capacity_bytes{namespace="crm"}
+            for: 30m
+            labels:
+              severity: warning
+              category: storage
+            annotations:
+              summary: "PVC {{ $labels.persistentvolumeclaim }} predicted to fill within 24h"
+              description: "Based on current growth rate, PVC {{ $labels.persistentvolumeclaim }} will be full within 24 hours."
+
+      - name: resource-network
+        interval: 30s
+        rules:
+          # Network alerts
+          - alert: HighNetworkReceiveErrors
+            expr: |
+              rate(container_network_receive_errors_total{
+                namespace="crm"
+              }[5m]) > 1
+            for: 5m
+            labels:
+              severity: warning
+              category: network
+            annotations:
+              summary: "High network receive errors for {{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} has {{ printf \"%.2f\" $value }} network receive errors per second."
+
+          - alert: HighNetworkTransmitErrors
+            expr: |
+              rate(container_network_transmit_errors_total{
+                namespace="crm"
+              }[5m]) > 1
+            for: 5m
+            labels:
+              severity: warning
+              category: network
+            annotations:
+              summary: "High network transmit errors for {{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} has {{ printf \"%.2f\" $value }} network transmit errors per second."
+
+          - alert: HighNetworkBandwidth
+            expr: |
+              (
+                rate(container_network_receive_bytes_total{namespace="crm"}[5m])
+                +
+                rate(container_network_transmit_bytes_total{namespace="crm"}[5m])
+              ) > 100 * 1024 * 1024
+            for: 10m
+            labels:
+              severity: warning
+              category: network
+            annotations:
+              summary: "High network bandwidth for {{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} is using {{ printf \"%.2f\" (div $value 1048576) }} MB/s of network bandwidth."

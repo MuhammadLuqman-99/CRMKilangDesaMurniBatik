@@ -1,0 +1,246 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-uptime-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: alerting
+data:
+  uptime-alerts.yaml: |
+    groups:
+      - name: uptime-http
+        interval: 30s
+        rules:
+          # HTTP endpoint availability
+          - alert: EndpointDown
+            expr: probe_success{job=~"blackbox-http.*"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              category: availability
+            annotations:
+              summary: "Endpoint {{ $labels.instance }} is down"
+              description: "HTTP endpoint {{ $labels.instance }} has been unreachable for more than 2 minutes."
+              runbook_url: "https://wiki.crm-platform.local/runbooks/endpoint-down"
+
+          - alert: EndpointUnstable
+            expr: |
+              avg_over_time(probe_success{job=~"blackbox-http.*"}[10m]) < 0.9
+            for: 5m
+            labels:
+              severity: warning
+              category: availability
+            annotations:
+              summary: "Endpoint {{ $labels.instance }} is unstable"
+              description: "HTTP endpoint {{ $labels.instance }} has less than 90% availability in the last 10 minutes."
+
+          - alert: HighProbeLatency
+            expr: probe_duration_seconds{job=~"blackbox-http.*"} > 2
+            for: 5m
+            labels:
+              severity: warning
+              category: performance
+            annotations:
+              summary: "High probe latency for {{ $labels.instance }}"
+              description: "Probe latency for {{ $labels.instance }} is {{ printf \"%.2f\" $value }}s."
+
+          - alert: CriticalProbeLatency
+            expr: probe_duration_seconds{job=~"blackbox-http.*"} > 5
+            for: 2m
+            labels:
+              severity: critical
+              category: performance
+            annotations:
+              summary: "Critical probe latency for {{ $labels.instance }}"
+              description: "Probe latency for {{ $labels.instance }} is {{ printf \"%.2f\" $value }}s, indicating severe performance issues."
+
+          - alert: HTTPStatusCodeChange
+            expr: |
+              probe_http_status_code{job=~"blackbox-http.*"} != 200
+              and
+              probe_success{job=~"blackbox-http.*"} == 1
+            for: 5m
+            labels:
+              severity: warning
+              category: availability
+            annotations:
+              summary: "Unexpected HTTP status for {{ $labels.instance }}"
+              description: "Endpoint {{ $labels.instance }} returned status code {{ $value }} instead of 200."
+
+      - name: uptime-ssl
+        interval: 300s
+        rules:
+          # SSL/TLS certificate monitoring
+          - alert: SSLCertificateExpiringSoon
+            expr: |
+              probe_ssl_earliest_cert_expiry - time() < 30 * 24 * 60 * 60
+            for: 1h
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "SSL certificate expiring soon for {{ $labels.instance }}"
+              description: "SSL certificate for {{ $labels.instance }} expires in {{ printf \"%.0f\" (div (sub $value 0) 86400) }} days."
+
+          - alert: SSLCertificateExpiringCritical
+            expr: |
+              probe_ssl_earliest_cert_expiry - time() < 7 * 24 * 60 * 60
+            for: 1h
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: "SSL certificate expiring very soon for {{ $labels.instance }}"
+              description: "SSL certificate for {{ $labels.instance }} expires in {{ printf \"%.0f\" (div (sub $value 0) 86400) }} days. Immediate renewal required."
+
+          - alert: SSLCertificateExpired
+            expr: probe_ssl_earliest_cert_expiry - time() <= 0
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: "SSL certificate expired for {{ $labels.instance }}"
+              description: "SSL certificate for {{ $labels.instance }} has expired."
+
+          - alert: SSLVersionInsecure
+            expr: probe_tls_version_info{version=~"TLS 1.0|TLS 1.1"} == 1
+            for: 1h
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "Insecure TLS version for {{ $labels.instance }}"
+              description: "Endpoint {{ $labels.instance }} is using insecure TLS version {{ $labels.version }}."
+
+      - name: uptime-tcp
+        interval: 30s
+        rules:
+          # TCP connectivity
+          - alert: TCPConnectionFailed
+            expr: probe_success{job="blackbox-tcp-databases"} == 0
+            for: 1m
+            labels:
+              severity: critical
+              category: availability
+            annotations:
+              summary: "TCP connection failed for {{ $labels.instance }}"
+              description: "Cannot establish TCP connection to {{ $labels.instance }}."
+
+          - alert: TCPConnectionUnstable
+            expr: |
+              avg_over_time(probe_success{job="blackbox-tcp-databases"}[10m]) < 0.95
+            for: 5m
+            labels:
+              severity: warning
+              category: availability
+            annotations:
+              summary: "TCP connection unstable for {{ $labels.instance }}"
+              description: "TCP connection to {{ $labels.instance }} has less than 95% success rate."
+
+          - alert: HighTCPLatency
+            expr: probe_duration_seconds{job="blackbox-tcp-databases"} > 0.5
+            for: 5m
+            labels:
+              severity: warning
+              category: performance
+            annotations:
+              summary: "High TCP latency for {{ $labels.instance }}"
+              description: "TCP connection latency to {{ $labels.instance }} is {{ printf \"%.3f\" $value }}s."
+
+      - name: uptime-dns
+        interval: 30s
+        rules:
+          # DNS resolution
+          - alert: DNSResolutionFailed
+            expr: probe_success{job="blackbox-dns"} == 0
+            for: 1m
+            labels:
+              severity: critical
+              category: availability
+            annotations:
+              summary: "DNS resolution failed"
+              description: "DNS resolution failed for {{ $labels.instance }}."
+
+          - alert: HighDNSLatency
+            expr: probe_dns_lookup_time_seconds > 0.5
+            for: 5m
+            labels:
+              severity: warning
+              category: performance
+            annotations:
+              summary: "High DNS lookup latency"
+              description: "DNS lookup latency is {{ printf \"%.3f\" $value }}s."
+
+      - name: uptime-grpc
+        interval: 30s
+        rules:
+          # gRPC connectivity
+          - alert: GRPCServiceDown
+            expr: probe_success{job="blackbox-grpc-services"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              category: availability
+            annotations:
+              summary: "gRPC service {{ $labels.service }} is down"
+              description: "gRPC service at {{ $labels.instance }} has been unreachable for more than 2 minutes."
+
+          - alert: HighGRPCLatency
+            expr: probe_duration_seconds{job="blackbox-grpc-services"} > 1
+            for: 5m
+            labels:
+              severity: warning
+              category: performance
+            annotations:
+              summary: "High gRPC latency for {{ $labels.service }}"
+              description: "gRPC probe latency for {{ $labels.instance }} is {{ printf \"%.2f\" $value }}s."
+
+      - name: uptime-sla
+        interval: 60s
+        rules:
+          # SLA monitoring
+          - alert: SLAViolationWarning
+            expr: |
+              (
+                sum(increase(probe_success{job=~"blackbox-http.*"}[24h])) by (instance)
+                /
+                sum(increase(probe_success{job=~"blackbox-http.*"}[24h]) + increase((probe_success{job=~"blackbox-http.*"} == 0)[24h])) by (instance)
+              ) * 100 < 99.9
+            for: 1h
+            labels:
+              severity: warning
+              category: sla
+            annotations:
+              summary: "SLA warning for {{ $labels.instance }}"
+              description: "24h availability for {{ $labels.instance }} is {{ printf \"%.2f\" $value }}%, below 99.9% SLA target."
+
+          - alert: SLAViolationCritical
+            expr: |
+              (
+                sum(increase(probe_success{job=~"blackbox-http.*"}[24h])) by (instance)
+                /
+                sum(increase(probe_success{job=~"blackbox-http.*"}[24h]) + increase((probe_success{job=~"blackbox-http.*"} == 0)[24h])) by (instance)
+              ) * 100 < 99.0
+            for: 1h
+            labels:
+              severity: critical
+              category: sla
+            annotations:
+              summary: "SLA violation for {{ $labels.instance }}"
+              description: "24h availability for {{ $labels.instance }} is {{ printf \"%.2f\" $value }}%, significantly below SLA target."
+
+          - alert: MonthlyUptimeBelowTarget
+            expr: |
+              (
+                sum(increase(probe_success{job=~"blackbox-http.*"}[30d])) by (instance)
+                /
+                sum(increase(probe_success{job=~"blackbox-http.*"}[30d]) + increase((probe_success{job=~"blackbox-http.*"} == 0)[30d])) by (instance)
+              ) * 100 < 99.9
+            for: 24h
+            labels:
+              severity: warning
+              category: sla
+            annotations:
+              summary: "Monthly uptime below target for {{ $labels.instance }}"
+              description: "30-day availability for {{ $labels.instance }} is {{ printf \"%.2f\" $value }}%."

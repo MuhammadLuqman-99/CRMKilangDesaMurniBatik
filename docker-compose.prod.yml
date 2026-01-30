@@ -1,0 +1,370 @@
+version: '3.8'
+
+# CRM Kilang Desa Murni Batik - Production Docker Compose
+# ========================================================
+# Production-ready configuration with:
+# - PostgreSQL with WAL archiving for PITR
+# - PgBouncer for connection pooling
+# - MinIO for backup storage
+# - MongoDB replica set
+# - Blue-green deployment support
+
+services:
+  # ==========================================
+  # DATABASES WITH REPLICATION
+  # ==========================================
+
+  # PostgreSQL Primary with PITR enabled
+  postgres-primary:
+    image: postgres:16-alpine
+    container_name: crm-postgres-primary
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-crm_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crm_secret_password}
+      POSTGRES_DB: crm_main
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_primary_data:/var/lib/postgresql/data
+      - postgres_wal_archive:/var/lib/postgresql/wal_archive
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./configs/postgres/postgresql-replication.conf:/etc/postgresql/postgresql.conf:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm_admin} -d crm_main"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crm-network
+
+  # PostgreSQL Replica for read scaling
+  postgres-replica:
+    image: postgres:16-alpine
+    container_name: crm-postgres-replica
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-crm_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crm_secret_password}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_PRIMARY_HOST: postgres-primary
+      REPLICATION_USER: replicator
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-repl_secret}
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+    command: >
+      bash -c "
+        until pg_isready -h postgres-primary -U ${POSTGRES_USER:-crm_admin}; do sleep 2; done;
+        if [ ! -f /var/lib/postgresql/data/pgdata/PG_VERSION ]; then
+          PGPASSWORD=${REPLICATION_PASSWORD:-repl_secret} pg_basebackup \
+            -h postgres-primary -U replicator -D /var/lib/postgresql/data/pgdata -vP -W;
+          touch /var/lib/postgresql/data/pgdata/standby.signal;
+          echo \"primary_conninfo = 'host=postgres-primary port=5432 user=replicator password=${REPLICATION_PASSWORD:-repl_secret}'\" >> /var/lib/postgresql/data/pgdata/postgresql.auto.conf;
+        fi;
+        postgres
+      "
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm_admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crm-network
+
+  # PgBouncer Connection Pooler
+  pgbouncer:
+    image: bitnami/pgbouncer:1.22.0
+    container_name: crm-pgbouncer
+    restart: unless-stopped
+    environment:
+      PGBOUNCER_DATABASE: "*"
+      POSTGRESQL_HOST: postgres-primary
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_USERNAME: ${POSTGRES_USER:-crm_admin}
+      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD:-crm_secret_password}
+      PGBOUNCER_PORT: 6432
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: 1000
+      PGBOUNCER_DEFAULT_POOL_SIZE: 20
+    ports:
+      - "6432:6432"
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-p", "6432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crm-network
+
+  # ==========================================
+  # MONGODB REPLICA SET
+  # ==========================================
+
+  mongodb-primary:
+    image: mongo:7.0
+    container_name: crm-mongodb-primary
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-crm_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-crm_secret_password}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_primary_data:/data/db
+      - ./configs/mongodb/mongod.conf:/etc/mongod.conf:ro
+      - ./configs/mongodb/keyfile:/etc/mongodb/keyfile:ro
+    command: mongod --replSet crm-rs --keyFile /etc/mongodb/keyfile --bind_ip_all
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crm-network
+
+  mongodb-secondary-1:
+    image: mongo:7.0
+    container_name: crm-mongodb-secondary-1
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-crm_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-crm_secret_password}
+    volumes:
+      - mongodb_secondary1_data:/data/db
+      - ./configs/mongodb/mongod.conf:/etc/mongod.conf:ro
+      - ./configs/mongodb/keyfile:/etc/mongodb/keyfile:ro
+    command: mongod --replSet crm-rs --keyFile /etc/mongodb/keyfile --bind_ip_all
+    depends_on:
+      mongodb-primary:
+        condition: service_healthy
+    networks:
+      - crm-network
+
+  mongodb-secondary-2:
+    image: mongo:7.0
+    container_name: crm-mongodb-secondary-2
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-crm_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-crm_secret_password}
+    volumes:
+      - mongodb_secondary2_data:/data/db
+      - ./configs/mongodb/mongod.conf:/etc/mongod.conf:ro
+      - ./configs/mongodb/keyfile:/etc/mongodb/keyfile:ro
+    command: mongod --replSet crm-rs --keyFile /etc/mongodb/keyfile --bind_ip_all
+    depends_on:
+      mongodb-primary:
+        condition: service_healthy
+    networks:
+      - crm-network
+
+  # MongoDB Replica Set Initializer
+  mongodb-init:
+    image: mongo:7.0
+    container_name: crm-mongodb-init
+    restart: "no"
+    environment:
+      MONGO_USER: ${MONGO_USER:-crm_admin}
+      MONGO_PASSWORD: ${MONGO_PASSWORD:-crm_secret_password}
+    command: >
+      mongosh --host mongodb-primary -u ${MONGO_USER:-crm_admin} -p ${MONGO_PASSWORD:-crm_secret_password} --authenticationDatabase admin --eval '
+        rs.initiate({
+          _id: "crm-rs",
+          members: [
+            { _id: 0, host: "mongodb-primary:27017", priority: 2 },
+            { _id: 1, host: "mongodb-secondary-1:27017", priority: 1 },
+            { _id: 2, host: "mongodb-secondary-2:27017", priority: 1 }
+          ]
+        })
+      '
+    depends_on:
+      mongodb-primary:
+        condition: service_healthy
+      mongodb-secondary-1:
+        condition: service_started
+      mongodb-secondary-2:
+        condition: service_started
+    networks:
+      - crm-network
+
+  # ==========================================
+  # BACKUP STORAGE (MinIO S3-Compatible)
+  # ==========================================
+
+  minio:
+    image: minio/minio:latest
+    container_name: crm-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-crm_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-crm_minio_secret}
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Console
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - crm-network
+
+  # MinIO bucket initialization
+  minio-init:
+    image: minio/mc:latest
+    container_name: crm-minio-init
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set crm http://minio:9000 ${MINIO_ACCESS_KEY:-crm_minio_admin} ${MINIO_SECRET_KEY:-crm_minio_secret};
+        mc mb --ignore-existing crm/crm-backups;
+        mc mb --ignore-existing crm/crm-wal-archive;
+        echo 'MinIO buckets created';
+      "
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - crm-network
+
+  # ==========================================
+  # REDIS & RABBITMQ
+  # ==========================================
+
+  redis:
+    image: redis:7-alpine
+    container_name: crm-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-crm_redis_password}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-crm_redis_password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crm-network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: crm-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-crm_admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-crm_rabbit_password}
+      RABBITMQ_DEFAULT_VHOST: crm_vhost
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - crm-network
+
+  # ==========================================
+  # APPLICATION SERVICES (Blue-Green)
+  # ==========================================
+
+  # IAM Service - Blue Deployment
+  iam-service-blue:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.iam
+    container_name: crm-iam-blue
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      APP_PORT: 8081
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_USER: ${POSTGRES_USER:-crm_admin}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-crm_secret_password}
+      DB_NAME: crm_iam
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-crm_redis_password}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-crm_admin}:${RABBITMQ_PASSWORD:-crm_rabbit_password}@rabbitmq:5672/crm_vhost
+    labels:
+      - "app.deployment.color=blue"
+    networks:
+      - crm-network
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # IAM Service - Green Deployment
+  iam-service-green:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.iam
+    container_name: crm-iam-green
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      APP_PORT: 8081
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_USER: ${POSTGRES_USER:-crm_admin}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-crm_secret_password}
+      DB_NAME: crm_iam
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-crm_redis_password}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-crm_admin}:${RABBITMQ_PASSWORD:-crm_rabbit_password}@rabbitmq:5672/crm_vhost
+    labels:
+      - "app.deployment.color=green"
+    networks:
+      - crm-network
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+# ==========================================
+# NETWORKS
+# ==========================================
+
+networks:
+  crm-network:
+    driver: bridge
+
+# ==========================================
+# VOLUMES
+# ==========================================
+
+volumes:
+  postgres_primary_data:
+  postgres_replica_data:
+  postgres_wal_archive:
+  mongodb_primary_data:
+  mongodb_secondary1_data:
+  mongodb_secondary2_data:
+  redis_data:
+  rabbitmq_data:
+  minio_data:

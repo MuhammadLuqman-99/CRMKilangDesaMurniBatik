@@ -1,0 +1,332 @@
+# ==============================================================================
+# Database Backup CronJobs for CRM Platform
+# ==============================================================================
+# - PostgreSQL daily backup at 2:00 AM UTC
+# - MongoDB daily backup at 2:30 AM UTC
+# - S3 upload with configurable retention
+# ==============================================================================
+
+---
+# ConfigMap for backup scripts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-scripts
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: backup-scripts
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: crm-platform
+data:
+  backup-postgres.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    
+    DATE=$(date +%Y%m%d_%H%M%S)
+    BACKUP_DIR="/backups"
+    
+    for DB in crm_iam crm_sales crm_notification; do
+      echo "[$(date)] Backing up database: ${DB}"
+      BACKUP_FILE="${BACKUP_DIR}/${DB}_${DATE}.dump"
+      
+      pg_dump \
+        -h "${PG_HOST}" \
+        -p "${PG_PORT}" \
+        -U "${PG_USER}" \
+        -d "${DB}" \
+        -Fc \
+        -f "${BACKUP_FILE}"
+      
+      if [ -f "${BACKUP_FILE}" ]; then
+        echo "[$(date)] Verifying backup: ${BACKUP_FILE}"
+        pg_restore --list "${BACKUP_FILE}" > /dev/null
+        
+        echo "[$(date)] Uploading to S3: ${BACKUP_FILE}"
+        aws s3 cp "${BACKUP_FILE}" "s3://${S3_BUCKET}/postgres/${DB}_${DATE}.dump" \
+          --endpoint-url "${S3_ENDPOINT}"
+        
+        rm -f "${BACKUP_FILE}"
+        echo "[$(date)] Backup completed: ${DB}"
+      else
+        echo "[$(date)] ERROR: Backup failed for ${DB}"
+        exit 1
+      fi
+    done
+    
+    # Cleanup old backups (keep 7 days)
+    aws s3 ls "s3://${S3_BUCKET}/postgres/" --endpoint-url "${S3_ENDPOINT}" | \
+      while read -r line; do
+        createDate=$(echo $line | awk '{print $1}')
+        fileName=$(echo $line | awk '{print $4}')
+        if [ ! -z "$fileName" ]; then
+          fileDate=$(date -d "$createDate" +%s)
+          cutoffDate=$(date -d "-7 days" +%s)
+          if [ $fileDate -lt $cutoffDate ]; then
+            aws s3 rm "s3://${S3_BUCKET}/postgres/${fileName}" --endpoint-url "${S3_ENDPOINT}"
+            echo "[$(date)] Deleted old backup: ${fileName}"
+          fi
+        fi
+      done
+    
+    echo "[$(date)] PostgreSQL backup job completed"
+
+  backup-mongodb.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    
+    DATE=$(date +%Y%m%d_%H%M%S)
+    BACKUP_DIR="/backups"
+    
+    for DB in crm_customers; do
+      echo "[$(date)] Backing up database: ${DB}"
+      BACKUP_FILE="${BACKUP_DIR}/${DB}_${DATE}.archive"
+      
+      mongodump \
+        --uri="mongodb://${MONGO_USER}:${MONGO_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}/${DB}?authSource=admin" \
+        --archive="${BACKUP_FILE}" \
+        --gzip
+      
+      if [ -f "${BACKUP_FILE}" ]; then
+        echo "[$(date)] Uploading to S3: ${BACKUP_FILE}"
+        aws s3 cp "${BACKUP_FILE}" "s3://${S3_BUCKET}/mongodb/${DB}_${DATE}.archive" \
+          --endpoint-url "${S3_ENDPOINT}"
+        
+        rm -f "${BACKUP_FILE}"
+        echo "[$(date)] Backup completed: ${DB}"
+      else
+        echo "[$(date)] ERROR: Backup failed for ${DB}"
+        exit 1
+      fi
+    done
+    
+    echo "[$(date)] MongoDB backup job completed"
+
+---
+# PostgreSQL Backup CronJob - Daily at 2:00 AM UTC
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: postgres-backup
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: postgres-backup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: crm-service-account
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+          containers:
+            - name: backup
+              image: postgres:16-alpine
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/bash", "/scripts/backup-postgres.sh"]
+              env:
+                - name: PG_HOST
+                  valueFrom:
+                    configMapKeyRef:
+                      name: crm-config
+                      key: POSTGRES_HOST
+                - name: PG_PORT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: crm-config
+                      key: POSTGRES_PORT
+                - name: PG_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: crm-secrets
+                      key: POSTGRES_USER
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: crm-secrets
+                      key: POSTGRES_PASSWORD
+                - name: S3_BUCKET
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backup-config
+                      key: S3_BUCKET
+                - name: S3_ENDPOINT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backup-config
+                      key: S3_ENDPOINT
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-s3-credentials
+                      key: access-key
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-s3-credentials
+                      key: secret-key
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              volumeMounts:
+                - name: backup-scripts
+                  mountPath: /scripts
+                - name: backup-storage
+                  mountPath: /backups
+          volumes:
+            - name: backup-scripts
+              configMap:
+                name: backup-scripts
+                defaultMode: 0755
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: backup-pvc
+
+---
+# MongoDB Backup CronJob - Daily at 2:30 AM UTC
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mongodb-backup
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: mongodb-backup
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  schedule: "30 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: mongodb-backup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: crm-service-account
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+          containers:
+            - name: backup
+              image: mongo:7.0
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/bash", "/scripts/backup-mongodb.sh"]
+              env:
+                - name: MONGO_HOST
+                  valueFrom:
+                    configMapKeyRef:
+                      name: crm-config
+                      key: MONGODB_HOST
+                - name: MONGO_PORT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: crm-config
+                      key: MONGODB_PORT
+                - name: MONGO_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: crm-secrets
+                      key: MONGODB_USER
+                - name: MONGO_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: crm-secrets
+                      key: MONGODB_PASSWORD
+                - name: S3_BUCKET
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backup-config
+                      key: S3_BUCKET
+                - name: S3_ENDPOINT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backup-config
+                      key: S3_ENDPOINT
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-s3-credentials
+                      key: access-key
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-s3-credentials
+                      key: secret-key
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              volumeMounts:
+                - name: backup-scripts
+                  mountPath: /scripts
+                - name: backup-storage
+                  mountPath: /backups
+          volumes:
+            - name: backup-scripts
+              configMap:
+                name: backup-scripts
+                defaultMode: 0755
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: backup-pvc
+
+---
+# Backup Configuration ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-config
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: backup-config
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: crm-platform
+data:
+  S3_BUCKET: "crm-backups"
+  S3_ENDPOINT: "http://minio:9000"
+  RETENTION_DAILY: "7"
+  RETENTION_WEEKLY: "4"
+  RETENTION_MONTHLY: "12"
+
+---
+# S3 Credentials Secret (placeholder - should be managed by external secrets)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup-s3-credentials
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: backup-s3-credentials
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: crm-platform
+type: Opaque
+stringData:
+  access-key: "CHANGE_ME_ACCESS_KEY"
+  secret-key: "CHANGE_ME_SECRET_KEY"

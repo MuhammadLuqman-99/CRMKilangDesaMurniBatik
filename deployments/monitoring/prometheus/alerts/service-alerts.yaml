@@ -1,0 +1,189 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-service-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: alerting
+data:
+  service-alerts.yaml: |
+    groups:
+      - name: service-health
+        interval: 30s
+        rules:
+          # Service availability
+          - alert: ServiceDown
+            expr: up{job=~"iam-service|customer-service|sales-service|notification-service"} == 0
+            for: 1m
+            labels:
+              severity: critical
+              category: availability
+            annotations:
+              summary: "Service {{ $labels.job }} is down"
+              description: "The {{ $labels.job }} service has been unreachable for more than 1 minute."
+              runbook_url: "https://wiki.crm-platform.local/runbooks/service-down"
+
+          - alert: ServiceHighRestartRate
+            expr: |
+              increase(kube_pod_container_status_restarts_total{
+                namespace="crm",
+                container=~"iam-service|customer-service|sales-service|notification-service"
+              }[1h]) > 5
+            for: 5m
+            labels:
+              severity: warning
+              category: stability
+            annotations:
+              summary: "High restart rate for {{ $labels.container }}"
+              description: "Container {{ $labels.container }} has restarted {{ $value }} times in the last hour."
+
+          - alert: ServiceNotReady
+            expr: |
+              kube_deployment_status_replicas_available{
+                namespace="crm",
+                deployment=~"iam-service|customer-service|sales-service|notification-service"
+              } < kube_deployment_spec_replicas{
+                namespace="crm",
+                deployment=~"iam-service|customer-service|sales-service|notification-service"
+              }
+            for: 5m
+            labels:
+              severity: warning
+              category: availability
+            annotations:
+              summary: "Service {{ $labels.deployment }} has unavailable replicas"
+              description: "Deployment {{ $labels.deployment }} has {{ $value }} replicas available, expected {{ $labels.replicas }}."
+
+      - name: service-errors
+        interval: 30s
+        rules:
+          # HTTP error rates
+          - alert: HighHTTPErrorRate
+            expr: |
+              (
+                sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+                /
+                sum(rate(http_requests_total[5m])) by (service)
+              ) * 100 > 5
+            for: 5m
+            labels:
+              severity: warning
+              category: errors
+            annotations:
+              summary: "High HTTP 5xx error rate for {{ $labels.service }}"
+              description: "{{ $labels.service }} has {{ printf \"%.2f\" $value }}% HTTP 5xx error rate."
+
+          - alert: CriticalHTTPErrorRate
+            expr: |
+              (
+                sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+                /
+                sum(rate(http_requests_total[5m])) by (service)
+              ) * 100 > 20
+            for: 2m
+            labels:
+              severity: critical
+              category: errors
+            annotations:
+              summary: "Critical HTTP error rate for {{ $labels.service }}"
+              description: "{{ $labels.service }} has {{ printf \"%.2f\" $value }}% HTTP 5xx error rate, immediate attention required."
+
+          - alert: HighHTTP4xxRate
+            expr: |
+              (
+                sum(rate(http_requests_total{status=~"4.."}[5m])) by (service)
+                /
+                sum(rate(http_requests_total[5m])) by (service)
+              ) * 100 > 25
+            for: 10m
+            labels:
+              severity: warning
+              category: errors
+            annotations:
+              summary: "High HTTP 4xx error rate for {{ $labels.service }}"
+              description: "{{ $labels.service }} has {{ printf \"%.2f\" $value }}% HTTP 4xx error rate, may indicate client issues or API misuse."
+
+      - name: service-latency
+        interval: 30s
+        rules:
+          # Response time alerts
+          - alert: HighResponseLatency
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)
+              ) > 1
+            for: 5m
+            labels:
+              severity: warning
+              category: performance
+            annotations:
+              summary: "High response latency for {{ $labels.service }}"
+              description: "95th percentile response time for {{ $labels.service }} is {{ printf \"%.2f\" $value }}s."
+
+          - alert: CriticalResponseLatency
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)
+              ) > 5
+            for: 2m
+            labels:
+              severity: critical
+              category: performance
+            annotations:
+              summary: "Critical response latency for {{ $labels.service }}"
+              description: "95th percentile response time for {{ $labels.service }} is {{ printf \"%.2f\" $value }}s, severely impacting user experience."
+
+          - alert: SlowDatabaseQueries
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(database_query_duration_seconds_bucket[5m])) by (le, service, operation)
+              ) > 0.5
+            for: 5m
+            labels:
+              severity: warning
+              category: performance
+            annotations:
+              summary: "Slow database queries in {{ $labels.service }}"
+              description: "95th percentile database query time for {{ $labels.operation }} in {{ $labels.service }} is {{ printf \"%.2f\" $value }}s."
+
+      - name: service-throughput
+        interval: 30s
+        rules:
+          # Request rate anomalies
+          - alert: LowRequestRate
+            expr: |
+              sum(rate(http_requests_total[5m])) by (service) < 0.1
+              and
+              sum(rate(http_requests_total[1h])) by (service) > 1
+            for: 10m
+            labels:
+              severity: warning
+              category: traffic
+            annotations:
+              summary: "Low request rate for {{ $labels.service }}"
+              description: "{{ $labels.service }} is receiving unusually low traffic ({{ printf \"%.2f\" $value }} req/s)."
+
+          - alert: HighRequestRate
+            expr: |
+              sum(rate(http_requests_total[5m])) by (service)
+              >
+              sum(rate(http_requests_total[1h])) by (service) * 3
+            for: 5m
+            labels:
+              severity: warning
+              category: traffic
+            annotations:
+              summary: "High request rate for {{ $labels.service }}"
+              description: "{{ $labels.service }} is receiving 3x higher traffic than usual ({{ printf \"%.2f\" $value }} req/s)."
+
+          - alert: RequestQueueBacklog
+            expr: |
+              sum(http_requests_in_flight) by (service) > 100
+            for: 2m
+            labels:
+              severity: warning
+              category: performance
+            annotations:
+              summary: "Request queue backlog for {{ $labels.service }}"
+              description: "{{ $labels.service }} has {{ $value }} requests in flight, indicating potential backpressure."

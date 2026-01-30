@@ -1,0 +1,273 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-security-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: alerting
+data:
+  security-alerts.yaml: |
+    groups:
+      - name: authentication-security
+        interval: 30s
+        rules:
+          # Authentication failure alerts
+          - alert: HighAuthenticationFailureRate
+            expr: |
+              sum(rate(auth_login_failures_total[5m])) by (service)
+              /
+              (sum(rate(auth_login_attempts_total[5m])) by (service) + 1) * 100 > 20
+            for: 5m
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "High authentication failure rate"
+              description: "{{ $labels.service }} has {{ printf \"%.2f\" $value }}% authentication failure rate."
+
+          - alert: CriticalAuthenticationFailures
+            expr: sum(rate(auth_login_failures_total[5m])) > 10
+            for: 2m
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: "Critical authentication failure rate"
+              description: "System is experiencing {{ printf \"%.2f\" $value }} authentication failures per second."
+
+          - alert: BruteForceAttemptDetected
+            expr: |
+              sum(increase(auth_login_failures_total[5m])) by (source_ip) > 50
+            for: 1m
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: "Possible brute force attack detected"
+              description: "IP {{ $labels.source_ip }} has {{ $value }} failed login attempts in 5 minutes."
+
+          - alert: AccountLockouts
+            expr: increase(auth_account_lockouts_total[1h]) > 10
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "High account lockout rate"
+              description: "{{ $value }} accounts have been locked out in the last hour."
+
+      - name: authorization-security
+        interval: 30s
+        rules:
+          # Authorization alerts
+          - alert: UnauthorizedAccessAttempts
+            expr: |
+              sum(rate(http_requests_total{status="403"}[5m])) by (service) > 5
+            for: 5m
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "High rate of unauthorized access attempts"
+              description: "{{ $labels.service }} is receiving {{ printf \"%.2f\" $value }} unauthorized requests per second."
+
+          - alert: PrivilegeEscalationAttempt
+            expr: |
+              sum(increase(auth_privilege_escalation_attempts_total[5m])) > 0
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: "Privilege escalation attempt detected"
+              description: "{{ $value }} privilege escalation attempts detected in the last 5 minutes."
+
+          - alert: CrossTenantAccessAttempt
+            expr: |
+              sum(increase(auth_cross_tenant_access_attempts_total[5m])) > 0
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: "Cross-tenant access attempt detected"
+              description: "{{ $value }} cross-tenant access attempts detected in the last 5 minutes."
+
+      - name: rate-limiting-security
+        interval: 30s
+        rules:
+          # Rate limiting alerts
+          - alert: HighRateLimitHits
+            expr: |
+              sum(rate(rate_limit_hits_total[5m])) by (service) > 100
+            for: 5m
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "High rate limit hit rate"
+              description: "{{ $labels.service }} is hitting rate limits {{ printf \"%.2f\" $value }} times per second."
+
+          - alert: RateLimitExhaustion
+            expr: |
+              sum(increase(rate_limit_hits_total[1m])) by (client_id) > 1000
+            for: 1m
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "Rate limit exhaustion by client"
+              description: "Client {{ $labels.client_id }} has exhausted rate limits with {{ $value }} requests in 1 minute."
+
+          - alert: DDoSPatternDetected
+            expr: |
+              sum(rate(http_requests_total[1m])) by (source_ip) > 1000
+            for: 2m
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: "Possible DDoS pattern detected"
+              description: "IP {{ $labels.source_ip }} is sending {{ printf \"%.2f\" $value }} requests per second."
+
+      - name: token-security
+        interval: 30s
+        rules:
+          # JWT/Token security alerts
+          - alert: InvalidTokenAttempts
+            expr: |
+              sum(rate(auth_invalid_token_attempts_total[5m])) > 10
+            for: 5m
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "High invalid token attempt rate"
+              description: "System is receiving {{ printf \"%.2f\" $value }} invalid token attempts per second."
+
+          - alert: ExpiredTokenUsage
+            expr: |
+              sum(rate(auth_expired_token_attempts_total[5m])) > 50
+            for: 5m
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "High expired token usage"
+              description: "System is receiving {{ printf \"%.2f\" $value }} expired token attempts per second. May indicate refresh token issues."
+
+          - alert: TokenTamperingDetected
+            expr: |
+              sum(increase(auth_token_tampering_detected_total[5m])) > 0
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: "Token tampering detected"
+              description: "{{ $value }} token tampering attempts detected in the last 5 minutes."
+
+      - name: input-validation-security
+        interval: 30s
+        rules:
+          # Input validation security
+          - alert: SQLInjectionAttempts
+            expr: |
+              sum(increase(security_sql_injection_attempts_total[5m])) > 0
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: "SQL injection attempts detected"
+              description: "{{ $value }} SQL injection attempts blocked in the last 5 minutes."
+
+          - alert: XSSAttempts
+            expr: |
+              sum(increase(security_xss_attempts_total[5m])) > 0
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "XSS attempts detected"
+              description: "{{ $value }} XSS attempts blocked in the last 5 minutes."
+
+          - alert: PathTraversalAttempts
+            expr: |
+              sum(increase(security_path_traversal_attempts_total[5m])) > 0
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: "Path traversal attempts detected"
+              description: "{{ $value }} path traversal attempts blocked in the last 5 minutes."
+
+      - name: certificate-security
+        interval: 300s
+        rules:
+          # TLS certificate alerts
+          - alert: CertificateExpiringSoon
+            expr: |
+              (probe_ssl_earliest_cert_expiry - time()) / 86400 < 30
+            for: 1h
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "TLS certificate expiring soon"
+              description: "Certificate for {{ $labels.instance }} expires in {{ printf \"%.0f\" $value }} days."
+
+          - alert: CertificateExpiringCritical
+            expr: |
+              (probe_ssl_earliest_cert_expiry - time()) / 86400 < 7
+            for: 1h
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: "TLS certificate expiring very soon"
+              description: "Certificate for {{ $labels.instance }} expires in {{ printf \"%.0f\" $value }} days. Immediate renewal required."
+
+          - alert: CertificateExpired
+            expr: probe_ssl_earliest_cert_expiry - time() < 0
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: "TLS certificate expired"
+              description: "Certificate for {{ $labels.instance }} has expired."
+
+      - name: audit-security
+        interval: 60s
+        rules:
+          # Audit log security
+          - alert: AuditLogGap
+            expr: |
+              time() - max(audit_log_last_entry_timestamp) by (service) > 300
+            for: 5m
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "Audit log gap detected"
+              description: "No audit log entries from {{ $labels.service }} for {{ printf \"%.0f\" $value }}s."
+
+          - alert: SensitiveDataAccess
+            expr: |
+              sum(increase(audit_sensitive_data_access_total[5m])) by (user_id) > 100
+            for: 5m
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "High sensitive data access rate"
+              description: "User {{ $labels.user_id }} has accessed sensitive data {{ $value }} times in 5 minutes."
+
+          - alert: AdminActionSpike
+            expr: |
+              sum(rate(audit_admin_actions_total[5m]))
+              /
+              avg_over_time(sum(rate(audit_admin_actions_total[5m]))[1h:5m]) > 3
+            for: 10m
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: "Unusual spike in admin actions"
+              description: "Admin action rate is {{ printf \"%.1f\" $value }}x higher than average."

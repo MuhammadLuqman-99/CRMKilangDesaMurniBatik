@@ -1,0 +1,314 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-database-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: alerting
+data:
+  database-alerts.yaml: |
+    groups:
+      - name: postgresql-alerts
+        interval: 30s
+        rules:
+          - alert: PostgreSQLDown
+            expr: pg_up == 0
+            for: 1m
+            labels:
+              severity: critical
+              category: database
+            annotations:
+              summary: "PostgreSQL instance is down"
+              description: "PostgreSQL instance {{ $labels.instance }} has been unreachable for more than 1 minute."
+
+          - alert: PostgreSQLHighConnections
+            expr: |
+              sum(pg_stat_activity_count) by (instance)
+              /
+              sum(pg_settings_max_connections) by (instance) * 100 > 80
+            for: 5m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "PostgreSQL high connection usage"
+              description: "PostgreSQL {{ $labels.instance }} is using {{ printf \"%.2f\" $value }}% of max connections."
+
+          - alert: PostgreSQLCriticalConnections
+            expr: |
+              sum(pg_stat_activity_count) by (instance)
+              /
+              sum(pg_settings_max_connections) by (instance) * 100 > 95
+            for: 2m
+            labels:
+              severity: critical
+              category: database
+            annotations:
+              summary: "PostgreSQL critical connection usage"
+              description: "PostgreSQL {{ $labels.instance }} is using {{ printf \"%.2f\" $value }}% of max connections."
+
+          - alert: PostgreSQLSlowQueries
+            expr: |
+              rate(pg_stat_statements_seconds_total[5m])
+              /
+              rate(pg_stat_statements_calls_total[5m]) > 1
+            for: 10m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "PostgreSQL slow queries detected"
+              description: "Average query time is {{ printf \"%.2f\" $value }}s on {{ $labels.instance }}."
+
+          - alert: PostgreSQLReplicationLag
+            expr: pg_replication_lag > 30
+            for: 5m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "PostgreSQL replication lag"
+              description: "PostgreSQL replication lag is {{ $value }}s on {{ $labels.instance }}."
+
+          - alert: PostgreSQLDeadlocks
+            expr: rate(pg_stat_database_deadlocks[5m]) > 0
+            for: 5m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "PostgreSQL deadlocks detected"
+              description: "PostgreSQL {{ $labels.instance }} is experiencing deadlocks."
+
+          - alert: PostgreSQLTableBloat
+            expr: |
+              pg_stat_user_tables_n_dead_tup
+              /
+              (pg_stat_user_tables_n_live_tup + pg_stat_user_tables_n_dead_tup + 1) * 100 > 20
+            for: 1h
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "PostgreSQL table bloat detected"
+              description: "Table {{ $labels.relname }} has {{ printf \"%.2f\" $value }}% dead tuples. Consider running VACUUM."
+
+      - name: mongodb-alerts
+        interval: 30s
+        rules:
+          - alert: MongoDBDown
+            expr: mongodb_up == 0
+            for: 1m
+            labels:
+              severity: critical
+              category: database
+            annotations:
+              summary: "MongoDB instance is down"
+              description: "MongoDB instance {{ $labels.instance }} has been unreachable for more than 1 minute."
+
+          - alert: MongoDBHighConnections
+            expr: |
+              mongodb_connections{state="current"}
+              /
+              mongodb_connections{state="available"} * 100 > 80
+            for: 5m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "MongoDB high connection usage"
+              description: "MongoDB {{ $labels.instance }} is using {{ printf \"%.2f\" $value }}% of available connections."
+
+          - alert: MongoDBReplicaSetUnhealthy
+            expr: mongodb_rs_members_health != 1
+            for: 2m
+            labels:
+              severity: critical
+              category: database
+            annotations:
+              summary: "MongoDB replica set member unhealthy"
+              description: "MongoDB replica set member {{ $labels.member }} on {{ $labels.instance }} is unhealthy."
+
+          - alert: MongoDBReplicationLag
+            expr: mongodb_rs_members_optimeDate - mongodb_rs_members_optimeDate{member_state="PRIMARY"} > 30
+            for: 5m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "MongoDB replication lag"
+              description: "MongoDB replication lag is {{ $value }}s on {{ $labels.instance }}."
+
+          - alert: MongoDBSlowQueries
+            expr: rate(mongodb_mongod_op_latencies_latency_total[5m]) / rate(mongodb_mongod_op_latencies_ops_total[5m]) / 1000 > 100
+            for: 10m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "MongoDB slow operations detected"
+              description: "Average operation latency is {{ printf \"%.2f\" $value }}ms on {{ $labels.instance }}."
+
+          - alert: MongoDBCursorsOpen
+            expr: mongodb_mongod_metrics_cursor_open{state="total"} > 1000
+            for: 5m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "MongoDB high cursor count"
+              description: "MongoDB {{ $labels.instance }} has {{ $value }} open cursors."
+
+      - name: redis-alerts
+        interval: 30s
+        rules:
+          - alert: RedisDown
+            expr: redis_up == 0
+            for: 1m
+            labels:
+              severity: critical
+              category: database
+            annotations:
+              summary: "Redis instance is down"
+              description: "Redis instance {{ $labels.instance }} has been unreachable for more than 1 minute."
+
+          - alert: RedisHighMemoryUsage
+            expr: |
+              redis_memory_used_bytes / redis_memory_max_bytes * 100 > 80
+            for: 5m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "Redis high memory usage"
+              description: "Redis {{ $labels.instance }} is using {{ printf \"%.2f\" $value }}% of max memory."
+
+          - alert: RedisCriticalMemoryUsage
+            expr: |
+              redis_memory_used_bytes / redis_memory_max_bytes * 100 > 95
+            for: 2m
+            labels:
+              severity: critical
+              category: database
+            annotations:
+              summary: "Redis critical memory usage"
+              description: "Redis {{ $labels.instance }} is using {{ printf \"%.2f\" $value }}% of max memory, eviction likely."
+
+          - alert: RedisHighConnectionCount
+            expr: redis_connected_clients > 500
+            for: 5m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "Redis high connection count"
+              description: "Redis {{ $labels.instance }} has {{ $value }} connected clients."
+
+          - alert: RedisRejectedConnections
+            expr: increase(redis_rejected_connections_total[5m]) > 0
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "Redis rejecting connections"
+              description: "Redis {{ $labels.instance }} has rejected {{ $value }} connections in the last 5 minutes."
+
+          - alert: RedisKeyEviction
+            expr: rate(redis_evicted_keys_total[5m]) > 0
+            for: 5m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "Redis key eviction occurring"
+              description: "Redis {{ $labels.instance }} is evicting {{ printf \"%.2f\" $value }} keys/s."
+
+          - alert: RedisReplicationBroken
+            expr: |
+              redis_connected_slaves < 1
+              and
+              redis_instance_info{role="master"} == 1
+            for: 5m
+            labels:
+              severity: critical
+              category: database
+            annotations:
+              summary: "Redis replication broken"
+              description: "Redis master {{ $labels.instance }} has no connected slaves."
+
+      - name: rabbitmq-alerts
+        interval: 30s
+        rules:
+          - alert: RabbitMQDown
+            expr: rabbitmq_up == 0
+            for: 1m
+            labels:
+              severity: critical
+              category: database
+            annotations:
+              summary: "RabbitMQ instance is down"
+              description: "RabbitMQ instance {{ $labels.instance }} has been unreachable for more than 1 minute."
+
+          - alert: RabbitMQHighQueueDepth
+            expr: rabbitmq_queue_messages > 10000
+            for: 5m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "RabbitMQ queue depth high"
+              description: "Queue {{ $labels.queue }} on {{ $labels.instance }} has {{ $value }} messages."
+
+          - alert: RabbitMQCriticalQueueDepth
+            expr: rabbitmq_queue_messages > 50000
+            for: 2m
+            labels:
+              severity: critical
+              category: database
+            annotations:
+              summary: "RabbitMQ queue depth critical"
+              description: "Queue {{ $labels.queue }} on {{ $labels.instance }} has {{ $value }} messages, consumers may be down."
+
+          - alert: RabbitMQNoConsumers
+            expr: rabbitmq_queue_consumers == 0 and rabbitmq_queue_messages > 0
+            for: 5m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "RabbitMQ queue has no consumers"
+              description: "Queue {{ $labels.queue }} has {{ $value }} messages but no consumers."
+
+          - alert: RabbitMQHighMemoryUsage
+            expr: |
+              rabbitmq_process_resident_memory_bytes
+              /
+              rabbitmq_memory_available_bytes * 100 > 80
+            for: 5m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "RabbitMQ high memory usage"
+              description: "RabbitMQ {{ $labels.instance }} is using {{ printf \"%.2f\" $value }}% of available memory."
+
+          - alert: RabbitMQUnackedMessages
+            expr: rabbitmq_queue_messages_unacked > 1000
+            for: 10m
+            labels:
+              severity: warning
+              category: database
+            annotations:
+              summary: "RabbitMQ high unacked message count"
+              description: "Queue {{ $labels.queue }} has {{ $value }} unacknowledged messages."
+
+          - alert: RabbitMQClusterPartition
+            expr: rabbitmq_cluster_partition > 0
+            for: 1m
+            labels:
+              severity: critical
+              category: database
+            annotations:
+              summary: "RabbitMQ cluster partition detected"
+              description: "RabbitMQ cluster {{ $labels.instance }} has a network partition."

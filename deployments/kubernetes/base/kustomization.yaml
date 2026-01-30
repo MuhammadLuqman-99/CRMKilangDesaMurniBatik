@@ -23,6 +23,11 @@ resources:
   - notification-deployment.yaml
   - hpa.yaml
   - ingress.yaml
+  # Database Operations
+  - database-backup-cronjob.yaml
+  - postgres-replication.yaml
+  - mongodb-replicaset.yaml
+  - pgbouncer-deployment.yaml
 
 commonLabels:
   app.kubernetes.io/part-of: crm-platform

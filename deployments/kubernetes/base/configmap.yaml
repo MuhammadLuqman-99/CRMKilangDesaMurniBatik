@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crm-config
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: crm-config
+    app.kubernetes.io/part-of: crm-platform
+data:
+  # Application settings
+  APP_ENV: "production"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+
+  # Service ports
+  IAM_PORT: "8081"
+  CUSTOMER_PORT: "8082"
+  SALES_PORT: "8083"
+  NOTIFICATION_PORT: "8084"
+
+  # Service discovery
+  SERVICE_DISCOVERY_TYPE: "kubernetes"
+
+  # Database settings (non-sensitive)
+  POSTGRES_HOST: "postgres-service"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB_IAM: "iam_db"
+  POSTGRES_DB_SALES: "sales_db"
+  POSTGRES_SSL_MODE: "require"
+
+  MONGODB_HOST: "mongodb-service"
+  MONGODB_PORT: "27017"
+  MONGODB_DB: "customer_db"
+
+  # Redis settings
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+
+  # RabbitMQ settings
+  RABBITMQ_HOST: "rabbitmq-service"
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_VHOST: "/"
+
+  # JWT settings
+  JWT_ISSUER: "crm-platform"
+  JWT_EXPIRATION: "3600"
+  JWT_REFRESH_EXPIRATION: "604800"
+
+  # Rate limiting
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_REQUESTS: "100"
+  RATE_LIMIT_WINDOW: "60"
+
+  # CORS settings
+  CORS_ALLOWED_ORIGINS: "*"
+  CORS_ALLOWED_METHODS: "GET,POST,PUT,DELETE,OPTIONS"
+  CORS_ALLOWED_HEADERS: "Content-Type,Authorization,X-Tenant-ID"
+
+  # Tracing
+  JAEGER_ENABLED: "true"
+  JAEGER_AGENT_HOST: "jaeger-agent"
+  JAEGER_AGENT_PORT: "6831"
+
+  # Metrics
+  METRICS_ENABLED: "true"
+  METRICS_PATH: "/metrics"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: postgres-init
+    app.kubernetes.io/part-of: crm-platform
+data:
+  init.sql: |
+    -- Create databases
+    CREATE DATABASE iam_db;
+    CREATE DATABASE sales_db;
+
+    -- Create extensions
+    \c iam_db;
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+    \c sales_db;
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pgcrypto";

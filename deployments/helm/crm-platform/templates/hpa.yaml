@@ -1,0 +1,51 @@
+{{- range $serviceName, $service := list
+    (dict "name" "iam" "config" $.Values.iamService)
+    (dict "name" "customer" "config" $.Values.customerService)
+    (dict "name" "sales" "config" $.Values.salesService)
+    (dict "name" "notification" "config" $.Values.notificationService)
+}}
+{{- if and $service.config.enabled $service.config.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $service.config.name }}-hpa
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ $service.config.name }}-hpa
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $service.config.name }}
+  minReplicas: {{ $service.config.autoscaling.minReplicas }}
+  maxReplicas: {{ $service.config.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $service.config.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ $service.config.autoscaling.targetMemoryUtilizationPercentage }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+{{- end }}
+{{- end }}

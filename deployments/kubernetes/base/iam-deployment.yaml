@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iam-service
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: iam-service
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: crm-platform
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: iam-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: iam-service
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: crm-platform
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: crm-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: iam-service
+          image: ghcr.io/muhammadluqman-99/crm-iam:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8081
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: crm-config
+            - secretRef:
+                name: crm-secrets
+          env:
+            - name: SERVICE_NAME
+              value: "iam-service"
+            - name: HTTP_PORT
+              value: "8081"
+            - name: POSTGRES_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: crm-config
+                  key: POSTGRES_HOST
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: iam-service
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: iam-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: iam-service
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: iam-service
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8081
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: iam-service

@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crm-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: crm-config
+    app.kubernetes.io/part-of: crm-platform
+data:
+  APP_ENV: {{ .Values.config.appEnv | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  LOG_FORMAT: {{ .Values.config.logFormat | quote }}
+
+  # Service ports
+  IAM_PORT: "8081"
+  CUSTOMER_PORT: "8082"
+  SALES_PORT: "8083"
+  NOTIFICATION_PORT: "8084"
+
+  # Database settings
+  POSTGRES_HOST: {{ .Values.config.postgres.host | quote }}
+  POSTGRES_PORT: {{ .Values.config.postgres.port | quote }}
+  POSTGRES_SSL_MODE: {{ .Values.config.postgres.sslMode | quote }}
+
+  MONGODB_HOST: {{ .Values.config.mongodb.host | quote }}
+  MONGODB_PORT: {{ .Values.config.mongodb.port | quote }}
+
+  REDIS_HOST: {{ .Values.config.redis.host | quote }}
+  REDIS_PORT: {{ .Values.config.redis.port | quote }}
+
+  RABBITMQ_HOST: {{ .Values.config.rabbitmq.host | quote }}
+  RABBITMQ_PORT: {{ .Values.config.rabbitmq.port | quote }}
+
+  # JWT settings
+  JWT_ISSUER: {{ .Values.config.jwt.issuer | quote }}
+  JWT_EXPIRATION: {{ .Values.config.jwt.expiration | quote }}
+  JWT_REFRESH_EXPIRATION: {{ .Values.config.jwt.refreshExpiration | quote }}
+
+  # Rate limiting
+  RATE_LIMIT_ENABLED: {{ .Values.config.rateLimit.enabled | quote }}
+  RATE_LIMIT_REQUESTS: {{ .Values.config.rateLimit.requests | quote }}
+  RATE_LIMIT_WINDOW: {{ .Values.config.rateLimit.window | quote }}

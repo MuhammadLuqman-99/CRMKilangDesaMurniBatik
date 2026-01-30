@@ -1,0 +1,349 @@
+# Default values for crm-platform
+# This is a YAML-formatted file.
+
+# Global settings
+global:
+  imageRegistry: ghcr.io
+  imagePullSecrets: []
+  storageClass: ""
+
+# Namespace
+namespace: crm
+
+# Common settings
+common:
+  labels:
+    app.kubernetes.io/part-of: crm-platform
+
+# ==============================================================================
+# IAM Service
+# ==============================================================================
+iamService:
+  enabled: true
+  name: iam-service
+
+  replicaCount: 2
+
+  image:
+    repository: muhammadluqman-99/crm-iam
+    tag: latest
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 8081
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  env:
+    SERVICE_NAME: iam-service
+    HTTP_PORT: "8081"
+
+# ==============================================================================
+# Customer Service
+# ==============================================================================
+customerService:
+  enabled: true
+  name: customer-service
+
+  replicaCount: 2
+
+  image:
+    repository: muhammadluqman-99/crm-customer
+    tag: latest
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 8082
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  env:
+    SERVICE_NAME: customer-service
+    HTTP_PORT: "8082"
+
+# ==============================================================================
+# Sales Service
+# ==============================================================================
+salesService:
+  enabled: true
+  name: sales-service
+
+  replicaCount: 2
+
+  image:
+    repository: muhammadluqman-99/crm-sales
+    tag: latest
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 8083
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  env:
+    SERVICE_NAME: sales-service
+    HTTP_PORT: "8083"
+
+# ==============================================================================
+# Notification Service
+# ==============================================================================
+notificationService:
+  enabled: true
+  name: notification-service
+
+  replicaCount: 2
+
+  image:
+    repository: muhammadluqman-99/crm-notification
+    tag: latest
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 8084
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  env:
+    SERVICE_NAME: notification-service
+    HTTP_PORT: "8084"
+
+# ==============================================================================
+# Ingress Configuration
+# ==============================================================================
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: api.crm.example.com
+      paths:
+        - path: /api/v1/auth
+          pathType: Prefix
+          service: iam-service
+          port: 8081
+        - path: /api/v1/users
+          pathType: Prefix
+          service: iam-service
+          port: 8081
+        - path: /api/v1/customers
+          pathType: Prefix
+          service: customer-service
+          port: 8082
+        - path: /api/v1/leads
+          pathType: Prefix
+          service: sales-service
+          port: 8083
+        - path: /api/v1/notifications
+          pathType: Prefix
+          service: notification-service
+          port: 8084
+  tls:
+    - secretName: crm-tls-secret
+      hosts:
+        - api.crm.example.com
+
+# ==============================================================================
+# Configuration
+# ==============================================================================
+config:
+  appEnv: production
+  logLevel: info
+  logFormat: json
+
+  # Database
+  postgres:
+    host: postgres-service
+    port: 5432
+    sslMode: require
+
+  mongodb:
+    host: mongodb-service
+    port: 27017
+
+  redis:
+    host: redis-service
+    port: 6379
+
+  rabbitmq:
+    host: rabbitmq-service
+    port: 5672
+
+  # JWT
+  jwt:
+    issuer: crm-platform
+    expiration: 3600
+    refreshExpiration: 604800
+
+  # Rate limiting
+  rateLimit:
+    enabled: true
+    requests: 100
+    window: 60
+
+# ==============================================================================
+# Secrets
+# ==============================================================================
+secrets:
+  # These should be overridden in production
+  postgres:
+    user: crm_user
+    password: CHANGE_ME
+  mongodb:
+    user: crm_user
+    password: CHANGE_ME
+  redis:
+    password: CHANGE_ME
+  rabbitmq:
+    user: crm_user
+    password: CHANGE_ME
+  jwt:
+    secret: CHANGE_ME_JWT_SECRET
+    refreshSecret: CHANGE_ME_REFRESH_SECRET
+
+# ==============================================================================
+# External Dependencies (Bitnami Charts)
+# ==============================================================================
+postgresql:
+  enabled: false  # Set to true to deploy PostgreSQL
+  auth:
+    postgresPassword: CHANGE_ME
+    database: iam_db
+  primary:
+    persistence:
+      size: 50Gi
+
+mongodb:
+  enabled: false  # Set to true to deploy MongoDB
+  auth:
+    rootPassword: CHANGE_ME
+    database: customer_db
+  persistence:
+    size: 50Gi
+
+redis:
+  enabled: false  # Set to true to deploy Redis
+  auth:
+    password: CHANGE_ME
+  master:
+    persistence:
+      size: 10Gi
+
+rabbitmq:
+  enabled: false  # Set to true to deploy RabbitMQ
+  auth:
+    username: admin
+    password: CHANGE_ME
+  persistence:
+    size: 20Gi
+
+# ==============================================================================
+# Service Account
+# ==============================================================================
+serviceAccount:
+  create: true
+  name: crm-service-account
+  annotations: {}
+
+# ==============================================================================
+# Security Context
+# ==============================================================================
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# ==============================================================================
+# Pod Settings
+# ==============================================================================
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway

@@ -1,0 +1,105 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: crm-storage
+  labels:
+    app.kubernetes.io/name: crm-storage
+    app.kubernetes.io/part-of: crm-platform
+provisioner: kubernetes.io/aws-ebs  # Change based on cloud provider
+parameters:
+  type: gp3
+  fsType: ext4
+  encrypted: "true"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+---
+# PostgreSQL PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: postgres-pvc
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: crm-storage
+  resources:
+    requests:
+      storage: 50Gi
+---
+# MongoDB PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: mongodb-pvc
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: crm-storage
+  resources:
+    requests:
+      storage: 50Gi
+---
+# Redis PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: redis-pvc
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: crm-storage
+  resources:
+    requests:
+      storage: 10Gi
+---
+# RabbitMQ PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rabbitmq-pvc
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: rabbitmq-pvc
+    app.kubernetes.io/component: messaging
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: crm-storage
+  resources:
+    requests:
+      storage: 20Gi
+---
+# Backup storage PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-pvc
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: backup-pvc
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: crm-storage
+  resources:
+    requests:
+      storage: 100Gi

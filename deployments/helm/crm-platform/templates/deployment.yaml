@@ -1,0 +1,117 @@
+{{- $global := .Values.global -}}
+{{- $common := .Values.common -}}
+{{- $config := .Values.config -}}
+
+{{- range $serviceName, $service := list
+    (dict "name" "iam" "config" $.Values.iamService "port" 8081)
+    (dict "name" "customer" "config" $.Values.customerService "port" 8082)
+    (dict "name" "sales" "config" $.Values.salesService "port" 8083)
+    (dict "name" "notification" "config" $.Values.notificationService "port" 8084)
+}}
+{{- if $service.config.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $service.config.name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ $service.config.name }}
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: crm-platform
+    app.kubernetes.io/version: {{ $.Chart.AppVersion | quote }}
+spec:
+  replicas: {{ $service.config.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $service.config.name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $service.config.name }}
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: crm-platform
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ $service.port | quote }}
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: {{ $.Values.serviceAccount.name }}
+      securityContext:
+        {{- toYaml $.Values.securityContext | nindent 8 }}
+      containers:
+        - name: {{ $service.config.name }}
+          image: {{ $global.imageRegistry }}/{{ $service.config.image.repository }}:{{ $service.config.image.tag }}
+          imagePullPolicy: {{ $service.config.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: crm-config
+            - secretRef:
+                name: crm-secrets
+          {{- if $service.config.env }}
+          env:
+            {{- range $key, $value := $service.config.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- end }}
+          resources:
+            {{- toYaml $service.config.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with $.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: {{ $service.config.name }}
+                topologyKey: kubernetes.io/hostname
+      {{- with $.Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- end }}

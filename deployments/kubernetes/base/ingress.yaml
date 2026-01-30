@@ -1,0 +1,171 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: crm-ingress
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: crm-ingress
+    app.kubernetes.io/part-of: crm-platform
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-Tenant-ID"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.crm.example.com
+      secretName: crm-tls-secret
+  rules:
+    - host: api.crm.example.com
+      http:
+        paths:
+          # IAM Service routes
+          - path: /api/v1/auth
+            pathType: Prefix
+            backend:
+              service:
+                name: iam-service
+                port:
+                  number: 8081
+          - path: /api/v1/users
+            pathType: Prefix
+            backend:
+              service:
+                name: iam-service
+                port:
+                  number: 8081
+          - path: /api/v1/roles
+            pathType: Prefix
+            backend:
+              service:
+                name: iam-service
+                port:
+                  number: 8081
+          - path: /api/v1/tenants
+            pathType: Prefix
+            backend:
+              service:
+                name: iam-service
+                port:
+                  number: 8081
+
+          # Customer Service routes
+          - path: /api/v1/customers
+            pathType: Prefix
+            backend:
+              service:
+                name: customer-service
+                port:
+                  number: 8082
+          - path: /api/v1/contacts
+            pathType: Prefix
+            backend:
+              service:
+                name: customer-service
+                port:
+                  number: 8082
+
+          # Sales Service routes
+          - path: /api/v1/leads
+            pathType: Prefix
+            backend:
+              service:
+                name: sales-service
+                port:
+                  number: 8083
+          - path: /api/v1/opportunities
+            pathType: Prefix
+            backend:
+              service:
+                name: sales-service
+                port:
+                  number: 8083
+          - path: /api/v1/deals
+            pathType: Prefix
+            backend:
+              service:
+                name: sales-service
+                port:
+                  number: 8083
+          - path: /api/v1/pipelines
+            pathType: Prefix
+            backend:
+              service:
+                name: sales-service
+                port:
+                  number: 8083
+
+          # Notification Service routes
+          - path: /api/v1/notifications
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service
+                port:
+                  number: 8084
+          - path: /api/v1/templates
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service
+                port:
+                  number: 8084
+---
+# Internal ingress for service-to-service communication
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: crm-internal-ingress
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: crm-internal-ingress
+    app.kubernetes.io/part-of: crm-platform
+  annotations:
+    kubernetes.io/ingress.class: nginx-internal
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx-internal
+  rules:
+    - host: internal.crm.local
+      http:
+        paths:
+          - path: /iam
+            pathType: Prefix
+            backend:
+              service:
+                name: iam-service
+                port:
+                  number: 8081
+          - path: /customer
+            pathType: Prefix
+            backend:
+              service:
+                name: customer-service
+                port:
+                  number: 8082
+          - path: /sales
+            pathType: Prefix
+            backend:
+              service:
+                name: sales-service
+                port:
+                  number: 8083
+          - path: /notification
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service
+                port:
+                  number: 8084

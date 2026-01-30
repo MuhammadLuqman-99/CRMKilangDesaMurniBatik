@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: crm-platform-base
+
+namespace: crm
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/part-of: crm-platform
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - rbac.yaml
+  - pvc.yaml
+  - iam-deployment.yaml
+  - customer-deployment.yaml
+  - sales-deployment.yaml
+  - notification-deployment.yaml
+  - hpa.yaml
+  - ingress.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: crm-platform
+  app.kubernetes.io/version: "1.0.0"
+
+configMapGenerator:
+  - name: crm-app-config
+    behavior: merge
+    literals:
+      - APP_ENV=production

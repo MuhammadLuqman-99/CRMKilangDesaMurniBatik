@@ -1,0 +1,28 @@
+{{- range $serviceName, $service := list
+    (dict "name" "iam" "config" $.Values.iamService "port" 8081)
+    (dict "name" "customer" "config" $.Values.customerService "port" 8082)
+    (dict "name" "sales" "config" $.Values.salesService "port" 8083)
+    (dict "name" "notification" "config" $.Values.notificationService "port" 8084)
+}}
+{{- if $service.config.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $service.config.name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ $service.config.name }}
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  type: {{ $service.config.service.type }}
+  ports:
+    - port: {{ $service.config.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ $service.config.name }}
+{{- end }}
+{{- end }}

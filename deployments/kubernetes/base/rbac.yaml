@@ -1,0 +1,201 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: crm-service-account
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: crm-service-account
+    app.kubernetes.io/part-of: crm-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: crm-role
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: crm-role
+    app.kubernetes.io/part-of: crm-platform
+rules:
+  # Allow reading ConfigMaps and Secrets
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+
+  # Allow reading service endpoints for service discovery
+  - apiGroups: [""]
+    resources: ["endpoints", "services"]
+    verbs: ["get", "list", "watch"]
+
+  # Allow reading pods for health checks
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+  # Allow leader election
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: crm-role-binding
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: crm-role-binding
+    app.kubernetes.io/part-of: crm-platform
+subjects:
+  - kind: ServiceAccount
+    name: crm-service-account
+    namespace: crm
+roleRef:
+  kind: Role
+  name: crm-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Network Policy - Allow internal communication
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: crm-network-policy
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: crm-network-policy
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: crm-platform
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8081
+        - protocol: TCP
+          port: 8082
+        - protocol: TCP
+          port: 8083
+        - protocol: TCP
+          port: 8084
+
+    # Allow internal communication within namespace
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: crm-platform
+      ports:
+        - protocol: TCP
+          port: 8081
+        - protocol: TCP
+          port: 8082
+        - protocol: TCP
+          port: 8083
+        - protocol: TCP
+          port: 8084
+
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8081
+        - protocol: TCP
+          port: 8082
+        - protocol: TCP
+          port: 8083
+        - protocol: TCP
+          port: 8084
+
+  egress:
+    # Allow DNS
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Allow internal communication
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: crm-platform
+
+    # Allow external HTTPS (for external services)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: iam-service-pdb
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: iam-service-pdb
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: iam-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: customer-service-pdb
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: customer-service-pdb
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: customer-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sales-service-pdb
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: sales-service-pdb
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sales-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: notification-service-pdb
+  namespace: crm
+  labels:
+    app.kubernetes.io/name: notification-service-pdb
+    app.kubernetes.io/part-of: crm-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: notification-service

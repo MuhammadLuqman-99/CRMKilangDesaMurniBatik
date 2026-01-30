@@ -245,7 +245,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build IAM Service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./deployments/docker/iam/Dockerfile
@@ -255,7 +255,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build Customer Service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./deployments/docker/customer/Dockerfile
@@ -265,7 +265,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build Sales Service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./deployments/docker/sales/Dockerfile
@@ -275,7 +275,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build Notification Service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./deployments/docker/notification/Dockerfile

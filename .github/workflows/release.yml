@@ -1,0 +1,280 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # ===========================================================================
+  # Semantic Version Analysis
+  # ===========================================================================
+  analyze-commits:
+    name: Analyze Commits
+    runs-on: ubuntu-latest
+    outputs:
+      release_type: ${{ steps.analyze.outputs.release_type }}
+      should_release: ${{ steps.analyze.outputs.should_release }}
+      next_version: ${{ steps.version.outputs.next_version }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag
+        id: latest-tag
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+          echo "Latest tag: ${LATEST_TAG}"
+
+      - name: Analyze commits for release type
+        id: analyze
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            RELEASE_TYPE="${{ github.event.inputs.release_type }}"
+            SHOULD_RELEASE="true"
+          else
+            # Analyze commits since last tag
+            LATEST_TAG="${{ steps.latest-tag.outputs.latest_tag }}"
+
+            # Get commits since last tag
+            COMMITS=$(git log ${LATEST_TAG}..HEAD --pretty=format:"%s" 2>/dev/null || git log --pretty=format:"%s")
+
+            # Determine release type based on conventional commits
+            RELEASE_TYPE="none"
+            SHOULD_RELEASE="false"
+
+            if echo "$COMMITS" | grep -qE "^BREAKING CHANGE:|^[a-z]+(\(.+\))?!:"; then
+              RELEASE_TYPE="major"
+              SHOULD_RELEASE="true"
+            elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
+              RELEASE_TYPE="minor"
+              SHOULD_RELEASE="true"
+            elif echo "$COMMITS" | grep -qE "^fix(\(.+\))?:|^perf(\(.+\))?:"; then
+              RELEASE_TYPE="patch"
+              SHOULD_RELEASE="true"
+            fi
+          fi
+
+          echo "release_type=${RELEASE_TYPE}" >> $GITHUB_OUTPUT
+          echo "should_release=${SHOULD_RELEASE}" >> $GITHUB_OUTPUT
+          echo "Release type: ${RELEASE_TYPE}"
+          echo "Should release: ${SHOULD_RELEASE}"
+
+      - name: Calculate next version
+        id: version
+        if: steps.analyze.outputs.should_release == 'true'
+        run: |
+          LATEST_TAG="${{ steps.latest-tag.outputs.latest_tag }}"
+          VERSION=${LATEST_TAG#v}
+          RELEASE_TYPE="${{ steps.analyze.outputs.release_type }}"
+
+          # Parse version components
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          MAJOR=${MAJOR:-0}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
+
+          # Increment version based on release type
+          case $RELEASE_TYPE in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEXT_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "next_version=${NEXT_VERSION}" >> $GITHUB_OUTPUT
+          echo "Next version: ${NEXT_VERSION}"
+
+      - name: Generate changelog
+        id: changelog
+        if: steps.analyze.outputs.should_release == 'true'
+        run: |
+          LATEST_TAG="${{ steps.latest-tag.outputs.latest_tag }}"
+
+          # Generate changelog from commits
+          echo "## What's Changed" > changelog.md
+          echo "" >> changelog.md
+
+          # Features
+          FEATURES=$(git log ${LATEST_TAG}..HEAD --pretty=format:"- %s" --grep="^feat" 2>/dev/null || true)
+          if [ -n "$FEATURES" ]; then
+            echo "### Features" >> changelog.md
+            echo "$FEATURES" >> changelog.md
+            echo "" >> changelog.md
+          fi
+
+          # Bug Fixes
+          FIXES=$(git log ${LATEST_TAG}..HEAD --pretty=format:"- %s" --grep="^fix" 2>/dev/null || true)
+          if [ -n "$FIXES" ]; then
+            echo "### Bug Fixes" >> changelog.md
+            echo "$FIXES" >> changelog.md
+            echo "" >> changelog.md
+          fi
+
+          # Performance
+          PERF=$(git log ${LATEST_TAG}..HEAD --pretty=format:"- %s" --grep="^perf" 2>/dev/null || true)
+          if [ -n "$PERF" ]; then
+            echo "### Performance" >> changelog.md
+            echo "$PERF" >> changelog.md
+            echo "" >> changelog.md
+          fi
+
+          # Documentation
+          DOCS=$(git log ${LATEST_TAG}..HEAD --pretty=format:"- %s" --grep="^docs" 2>/dev/null || true)
+          if [ -n "$DOCS" ]; then
+            echo "### Documentation" >> changelog.md
+            echo "$DOCS" >> changelog.md
+            echo "" >> changelog.md
+          fi
+
+          # Other changes
+          OTHER=$(git log ${LATEST_TAG}..HEAD --pretty=format:"- %s" --grep="^chore\|^refactor\|^style\|^test\|^ci\|^build" 2>/dev/null || true)
+          if [ -n "$OTHER" ]; then
+            echo "### Other Changes" >> changelog.md
+            echo "$OTHER" >> changelog.md
+            echo "" >> changelog.md
+          fi
+
+          CHANGELOG=$(cat changelog.md)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Upload changelog
+        if: steps.analyze.outputs.should_release == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: changelog.md
+
+  # ===========================================================================
+  # Create Release
+  # ===========================================================================
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [analyze-commits]
+    if: needs.analyze-commits.outputs.should_release == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Run tests before release
+        run: go test -v -race -short ./...
+
+      - name: Create and push tag
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+
+          VERSION="${{ needs.analyze-commits.outputs.next_version }}"
+          git tag -a ${VERSION} -m "Release ${VERSION}"
+          git push origin ${VERSION}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.analyze-commits.outputs.next_version }}
+          name: Release ${{ needs.analyze-commits.outputs.next_version }}
+          body: ${{ needs.analyze-commits.outputs.changelog }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+  # ===========================================================================
+  # Update Changelog File
+  # ===========================================================================
+  update-changelog:
+    name: Update CHANGELOG.md
+    runs-on: ubuntu-latest
+    needs: [analyze-commits, create-release]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download changelog
+        uses: actions/download-artifact@v4
+        with:
+          name: changelog
+          path: .
+
+      - name: Update CHANGELOG.md
+        run: |
+          VERSION="${{ needs.analyze-commits.outputs.next_version }}"
+          DATE=$(date +%Y-%m-%d)
+
+          # Create or update CHANGELOG.md
+          if [ -f CHANGELOG.md ]; then
+            # Insert new version at the top (after header)
+            {
+              head -n 7 CHANGELOG.md
+              echo ""
+              echo "## [${VERSION}] - ${DATE}"
+              echo ""
+              tail -n +3 changelog.md
+              echo ""
+              tail -n +8 CHANGELOG.md
+            } > CHANGELOG.tmp
+            mv CHANGELOG.tmp CHANGELOG.md
+          else
+            # Create new CHANGELOG.md
+            cat > CHANGELOG.md << 'HEADER'
+          # Changelog
+
+          All notable changes to this project will be documented in this file.
+
+          The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+          and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+          HEADER
+            echo "" >> CHANGELOG.md
+            echo "## [${VERSION}] - ${DATE}" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            tail -n +3 changelog.md >> CHANGELOG.md
+          fi
+
+      - name: Commit and push changelog
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+
+          git add CHANGELOG.md
+          git commit -m "docs: update CHANGELOG for ${{ needs.analyze-commits.outputs.next_version }}" || true
+          git push origin main || true

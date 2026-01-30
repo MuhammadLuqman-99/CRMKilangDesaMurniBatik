@@ -1,0 +1,235 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  GO_VERSION: '1.21'
+  MIN_COVERAGE: 60
+
+jobs:
+  # ===========================================================================
+  # Code Quality Gates
+  # ===========================================================================
+  quality-gates:
+    name: Quality Gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run tests with coverage
+        run: |
+          go test -v -race -short -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Check coverage threshold
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Total coverage: ${COVERAGE}%"
+
+          if (( $(echo "$COVERAGE < ${{ env.MIN_COVERAGE }}" | bc -l) )); then
+            echo "::error::Coverage ${COVERAGE}% is below minimum threshold of ${{ env.MIN_COVERAGE }}%"
+            exit 1
+          fi
+
+          echo "::notice::Coverage ${COVERAGE}% meets minimum threshold of ${{ env.MIN_COVERAGE }}%"
+
+      - name: Generate HTML coverage report
+        run: go tool cover -html=coverage.out -o coverage.html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html-report
+          path: coverage.html
+
+  # ===========================================================================
+  # Static Analysis
+  # ===========================================================================
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Run staticcheck
+        run: staticcheck ./...
+
+      - name: Check for common mistakes
+        run: go vet ./...
+
+      - name: Check formatting
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "::error::Code is not properly formatted. Run 'gofmt -w .' to fix."
+            gofmt -l .
+            exit 1
+          fi
+
+  # ===========================================================================
+  # Complexity Analysis
+  # ===========================================================================
+  complexity:
+    name: Complexity Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install gocyclo
+        run: go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+
+      - name: Check cyclomatic complexity
+        run: |
+          # Find functions with complexity > 15
+          HIGH_COMPLEXITY=$(gocyclo -over 15 . 2>/dev/null || true)
+
+          if [ -n "$HIGH_COMPLEXITY" ]; then
+            echo "::warning::Functions with high cyclomatic complexity (>15):"
+            echo "$HIGH_COMPLEXITY"
+          else
+            echo "::notice::All functions have acceptable complexity"
+          fi
+
+      - name: Install gocognit
+        run: go install github.com/uudashr/gocognit/cmd/gocognit@latest
+
+      - name: Check cognitive complexity
+        run: |
+          # Find functions with cognitive complexity > 20
+          gocognit -over 20 . 2>/dev/null || true
+
+  # ===========================================================================
+  # Dependency Analysis
+  # ===========================================================================
+  dependencies:
+    name: Dependency Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Check for outdated dependencies
+        run: |
+          go list -u -m all 2>/dev/null | grep '\[' || echo "All dependencies are up to date"
+
+      - name: Check for unused dependencies
+        run: |
+          go mod tidy
+          if [ -n "$(git diff go.mod go.sum)" ]; then
+            echo "::warning::Unused dependencies found. Run 'go mod tidy' to clean up."
+            git diff go.mod go.sum
+          fi
+
+      - name: Generate dependency graph
+        run: |
+          go mod graph > deps.txt
+          echo "Dependency graph generated"
+
+      - name: Upload dependency graph
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-graph
+          path: deps.txt
+
+  # ===========================================================================
+  # Documentation Check
+  # ===========================================================================
+  documentation:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Check exported functions documentation
+        run: |
+          # Install go-lint for documentation checks
+          go install golang.org/x/lint/golint@latest
+
+          # Check for missing documentation on exported items
+          golint ./... 2>/dev/null | grep -E "exported (function|type|method|const|var)" | head -20 || true
+
+  # ===========================================================================
+  # PR Quality Check
+  # ===========================================================================
+  pr-quality:
+    name: PR Quality Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR title format
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+
+          # Check for conventional commits format
+          if ! echo "$PR_TITLE" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .+"; then
+            echo "::warning::PR title should follow conventional commits format"
+            echo "Format: <type>(<scope>): <description>"
+            echo "Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+          fi
+
+      - name: Check for WIP
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+
+          if echo "$PR_TITLE" | grep -qiE "(WIP|Work in Progress)"; then
+            echo "::error::PR is marked as Work in Progress"
+            exit 1
+          fi
+
+      - name: Count changed lines
+        run: |
+          ADDITIONS=${{ github.event.pull_request.additions }}
+          DELETIONS=${{ github.event.pull_request.deletions }}
+          TOTAL=$((ADDITIONS + DELETIONS))
+
+          echo "Changes: +${ADDITIONS} -${DELETIONS} (total: ${TOTAL})"
+
+          if [ $TOTAL -gt 1000 ]; then
+            echo "::warning::Large PR detected (${TOTAL} lines changed). Consider breaking into smaller PRs."
+          fi

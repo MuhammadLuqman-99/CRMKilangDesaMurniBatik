@@ -1,0 +1,56 @@
+{
+  "name": "@kilangbatik/crm-sdk",
+  "version": "1.0.0",
+  "description": "Official TypeScript/JavaScript SDK for CRM Kilang Desa Murni Batik API",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "crm",
+    "api",
+    "sdk",
+    "typescript",
+    "kilangbatik",
+    "sales",
+    "leads",
+    "customers"
+  ],
+  "author": "Kilang Desa Murni Batik",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kilangbatik/crm-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/kilangbatik/crm-sdk/issues"
+  },
+  "homepage": "https://github.com/kilangbatik/crm-sdk#readme",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

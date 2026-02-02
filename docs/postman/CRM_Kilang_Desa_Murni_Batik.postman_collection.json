@@ -1,0 +1,2633 @@
+{
+	"info": {
+		"_postman_id": "crm-kilang-desa-murni-batik",
+		"name": "CRM Kilang Desa Murni Batik",
+		"description": "Complete API collection for CRM Kilang Desa Murni Batik - A multi-tenant CRM system built with Go microservices.\n\n## Getting Started\n\n1. Import this collection into Postman\n2. Import the environment file (CRM_Environment.postman_environment.json)\n3. Update the `base_url` in the environment to your API gateway URL\n4. Use the Login endpoint to get access tokens\n5. Tokens are automatically saved to environment variables\n\n## Services\n\n- **IAM Service**: Authentication, users, roles, tenants\n- **Customer Service**: Customers, contacts, notes, activities, segments\n- **Sales Service**: Leads, opportunities, deals, pipelines\n- **Notification Service**: Templates, email/SMS sending\n\n## Authentication\n\nAll endpoints (except login/register) require Bearer token authentication. The collection automatically sets the `access_token` after successful login.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "{{base_url}}"
+		}
+	],
+	"item": [
+		{
+			"name": "IAM Service",
+			"description": "Identity and Access Management - Authentication, Users, Roles, and Tenants",
+			"item": [
+				{
+					"name": "Auth",
+					"description": "Authentication endpoints",
+					"item": [
+						{
+							"name": "Register",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"SecurePassword123!\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"tenant_id\": \"{{tenant_id}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/register",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "auth", "register"]
+								},
+								"description": "Register a new user account"
+							}
+						},
+						{
+							"name": "Login",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = pm.response.json();",
+											"if (jsonData.access_token) {",
+											"    pm.environment.set('access_token', jsonData.access_token);",
+											"    pm.environment.set('refresh_token', jsonData.refresh_token);",
+											"}",
+											"",
+											"pm.test('Login successful', function() {",
+											"    pm.response.to.have.status(200);",
+											"    pm.expect(jsonData).to.have.property('access_token');",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"{{user_email}}\",\n    \"password\": \"{{user_password}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/login",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "auth", "login"]
+								},
+								"description": "Authenticate and receive JWT tokens. Access token is automatically saved to environment."
+							}
+						},
+						{
+							"name": "Refresh Token",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = pm.response.json();",
+											"if (jsonData.access_token) {",
+											"    pm.environment.set('access_token', jsonData.access_token);",
+											"    pm.environment.set('refresh_token', jsonData.refresh_token);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/refresh",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "auth", "refresh"]
+								},
+								"description": "Refresh access token using refresh token"
+							}
+						},
+						{
+							"name": "Logout",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/logout",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "auth", "logout"]
+								},
+								"description": "Logout and invalidate tokens"
+							}
+						},
+						{
+							"name": "Get Current User",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/me",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "auth", "me"]
+								},
+								"description": "Get current authenticated user information"
+							}
+						},
+						{
+							"name": "Change Password",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"current_password\": \"OldPassword123!\",\n    \"new_password\": \"NewSecurePassword456!\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/password",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "auth", "password"]
+								},
+								"description": "Change password for current user"
+							}
+						}
+					]
+				},
+				{
+					"name": "Users",
+					"description": "User management endpoints",
+					"item": [
+						{
+							"name": "List Users",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/users?page=1&per_page=20",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "users"],
+									"query": [
+										{"key": "page", "value": "1"},
+										{"key": "per_page", "value": "20"},
+										{"key": "search", "value": "", "disabled": true},
+										{"key": "role", "value": "", "disabled": true},
+										{"key": "status", "value": "", "disabled": true}
+									]
+								},
+								"description": "List all users with pagination and filters"
+							}
+						},
+						{
+							"name": "Get User",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/users/{{user_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "users", "{{user_id}}"]
+								},
+								"description": "Get user details by ID"
+							}
+						},
+						{
+							"name": "Update User",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"phone\": \"+60123456789\",\n    \"title\": \"Sales Manager\",\n    \"department\": \"Sales\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/users/{{user_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "users", "{{user_id}}"]
+								},
+								"description": "Update user information"
+							}
+						},
+						{
+							"name": "Delete User",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/users/{{user_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "users", "{{user_id}}"]
+								},
+								"description": "Delete a user"
+							}
+						},
+						{
+							"name": "Update User Status",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"status\": \"active\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/users/{{user_id}}/status",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "users", "{{user_id}}", "status"]
+								},
+								"description": "Update user status (active, inactive, suspended)"
+							}
+						},
+						{
+							"name": "Get User Roles",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/users/{{user_id}}/roles",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "users", "{{user_id}}", "roles"]
+								},
+								"description": "Get roles assigned to a user"
+							}
+						},
+						{
+							"name": "Assign Role to User",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"role_id\": \"{{role_id}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/users/{{user_id}}/roles",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "users", "{{user_id}}", "roles"]
+								},
+								"description": "Assign a role to a user"
+							}
+						},
+						{
+							"name": "Remove Role from User",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/users/{{user_id}}/roles?role_id={{role_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "users", "{{user_id}}", "roles"],
+									"query": [
+										{"key": "role_id", "value": "{{role_id}}"}
+									]
+								},
+								"description": "Remove a role from a user"
+							}
+						},
+						{
+							"name": "Get User Permissions",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/users/{{user_id}}/permissions",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "users", "{{user_id}}", "permissions"]
+								},
+								"description": "Get all permissions for a user (aggregated from roles)"
+							}
+						}
+					]
+				},
+				{
+					"name": "Roles",
+					"description": "Role management endpoints",
+					"item": [
+						{
+							"name": "List Roles",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/roles",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "roles"]
+								},
+								"description": "List all roles"
+							}
+						},
+						{
+							"name": "Create Role",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Sales Representative\",\n    \"description\": \"Sales team member with limited access\",\n    \"permissions\": [\n        \"leads:read\",\n        \"leads:create\",\n        \"leads:update\",\n        \"customers:read\",\n        \"opportunities:read\",\n        \"opportunities:create\"\n    ]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/roles",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "roles"]
+								},
+								"description": "Create a new role"
+							}
+						},
+						{
+							"name": "Get System Roles",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/roles/system",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "roles", "system"]
+								},
+								"description": "Get predefined system roles"
+							}
+						},
+						{
+							"name": "Get Role",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/roles/{{role_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "roles", "{{role_id}}"]
+								},
+								"description": "Get role details by ID"
+							}
+						},
+						{
+							"name": "Update Role",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Senior Sales Representative\",\n    \"description\": \"Updated description\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/roles/{{role_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "roles", "{{role_id}}"]
+								},
+								"description": "Update role information"
+							}
+						},
+						{
+							"name": "Delete Role",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/roles/{{role_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "roles", "{{role_id}}"]
+								},
+								"description": "Delete a role"
+							}
+						},
+						{
+							"name": "Get Users with Role",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/roles/{{role_id}}/users",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "roles", "{{role_id}}", "users"]
+								},
+								"description": "Get all users assigned to a role"
+							}
+						},
+						{
+							"name": "Add Permissions to Role",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"permissions\": [\n        \"deals:read\",\n        \"deals:create\"\n    ]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/roles/{{role_id}}/permissions",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "roles", "{{role_id}}", "permissions"]
+								},
+								"description": "Add permissions to a role"
+							}
+						},
+						{
+							"name": "Remove Permissions from Role",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"permissions\": [\n        \"deals:delete\"\n    ]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/roles/{{role_id}}/permissions",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "roles", "{{role_id}}", "permissions"]
+								},
+								"description": "Remove permissions from a role"
+							}
+						}
+					]
+				},
+				{
+					"name": "Tenants",
+					"description": "Multi-tenant management endpoints",
+					"item": [
+						{
+							"name": "Check Slug Availability",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/tenants/check-slug?slug=acme-corp",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "tenants", "check-slug"],
+									"query": [
+										{"key": "slug", "value": "acme-corp"}
+									]
+								},
+								"description": "Check if a tenant slug is available"
+							}
+						},
+						{
+							"name": "Get Tenant by Slug",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/tenants/by-slug/acme-corp",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "tenants", "by-slug", "acme-corp"]
+								},
+								"description": "Get tenant public info by slug"
+							}
+						},
+						{
+							"name": "List Tenants",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/tenants?page=1&per_page=20",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "tenants"],
+									"query": [
+										{"key": "page", "value": "1"},
+										{"key": "per_page", "value": "20"}
+									]
+								},
+								"description": "List all tenants (admin only)"
+							}
+						},
+						{
+							"name": "Create Tenant",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = pm.response.json();",
+											"if (jsonData.id) {",
+											"    pm.environment.set('tenant_id', jsonData.id);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Acme Corporation\",\n    \"slug\": \"acme-corp\",\n    \"plan\": \"professional\",\n    \"owner_email\": \"admin@acme.com\",\n    \"settings\": {\n        \"timezone\": \"Asia/Kuala_Lumpur\",\n        \"currency\": \"MYR\"\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/tenants",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "tenants"]
+								},
+								"description": "Create a new tenant"
+							}
+						},
+						{
+							"name": "Get Tenant",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/tenants/{{tenant_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "tenants", "{{tenant_id}}"]
+								},
+								"description": "Get tenant details by ID"
+							}
+						},
+						{
+							"name": "Update Tenant",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Acme Corporation Ltd\",\n    \"settings\": {\n        \"timezone\": \"Asia/Singapore\"\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/tenants/{{tenant_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "tenants", "{{tenant_id}}"]
+								},
+								"description": "Update tenant information"
+							}
+						},
+						{
+							"name": "Delete Tenant",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/tenants/{{tenant_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "tenants", "{{tenant_id}}"]
+								},
+								"description": "Delete a tenant (soft delete)"
+							}
+						},
+						{
+							"name": "Update Tenant Status",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"status\": \"active\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/tenants/{{tenant_id}}/status",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "tenants", "{{tenant_id}}", "status"]
+								},
+								"description": "Update tenant status (active, suspended, cancelled)"
+							}
+						},
+						{
+							"name": "Update Tenant Plan",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"plan\": \"enterprise\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/tenants/{{tenant_id}}/plan",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "tenants", "{{tenant_id}}", "plan"]
+								},
+								"description": "Upgrade or downgrade tenant plan"
+							}
+						},
+						{
+							"name": "Get Tenant Statistics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/tenants/{{tenant_id}}/stats",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "tenants", "{{tenant_id}}", "stats"]
+								},
+								"description": "Get tenant usage statistics"
+							}
+						}
+					]
+				},
+				{
+					"name": "Health",
+					"description": "Health check endpoints",
+					"item": [
+						{
+							"name": "Health Check",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/health",
+									"host": ["{{base_url}}"],
+									"path": ["health"]
+								},
+								"description": "Basic health check"
+							}
+						},
+						{
+							"name": "Readiness Check",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/ready",
+									"host": ["{{base_url}}"],
+									"path": ["ready"]
+								},
+								"description": "Kubernetes readiness probe"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Customer Service",
+			"description": "Customer management, contacts, notes, activities, and segments",
+			"item": [
+				{
+					"name": "Customers",
+					"description": "Customer CRUD operations",
+					"item": [
+						{
+							"name": "Create Customer",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = pm.response.json();",
+											"if (jsonData.id) {",
+											"    pm.environment.set('customer_id', jsonData.id);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Acme Corporation\",\n    \"email\": \"sales@acme.com\",\n    \"phone\": \"+60123456789\",\n    \"company\": \"Acme Corp Sdn Bhd\",\n    \"industry\": \"Technology\",\n    \"website\": \"https://acme.com\",\n    \"address\": {\n        \"street\": \"123 Main Street\",\n        \"city\": \"Kuala Lumpur\",\n        \"state\": \"Wilayah Persekutuan\",\n        \"postal_code\": \"50000\",\n        \"country\": \"Malaysia\"\n    },\n    \"tags\": [\"enterprise\", \"technology\"]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers"]
+								},
+								"description": "Create a new customer"
+							}
+						},
+						{
+							"name": "Search Customers",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers?page=1&per_page=20",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers"],
+									"query": [
+										{"key": "page", "value": "1"},
+										{"key": "per_page", "value": "20"},
+										{"key": "search", "value": "", "disabled": true},
+										{"key": "status", "value": "", "disabled": true},
+										{"key": "industry", "value": "", "disabled": true},
+										{"key": "segment_id", "value": "", "disabled": true},
+										{"key": "owner_id", "value": "", "disabled": true},
+										{"key": "sort", "value": "created_at", "disabled": true},
+										{"key": "order", "value": "desc", "disabled": true}
+									]
+								},
+								"description": "Search and filter customers"
+							}
+						},
+						{
+							"name": "Export Customers",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/export?format=csv",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "export"],
+									"query": [
+										{"key": "format", "value": "csv"}
+									]
+								},
+								"description": "Export customers to CSV/Excel"
+							}
+						},
+						{
+							"name": "Get Customer",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}"]
+								},
+								"description": "Get customer details by ID"
+							}
+						},
+						{
+							"name": "Update Customer",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Acme Corporation Sdn Bhd\",\n    \"status\": \"active\",\n    \"tags\": [\"enterprise\", \"technology\", \"priority\"]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}"]
+								},
+								"description": "Update customer information"
+							}
+						},
+						{
+							"name": "Delete Customer",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}"]
+								},
+								"description": "Soft delete a customer"
+							}
+						},
+						{
+							"name": "Restore Customer",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/restore",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "restore"]
+								},
+								"description": "Restore a soft-deleted customer"
+							}
+						},
+						{
+							"name": "Activate Customer",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/activate",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "activate"]
+								},
+								"description": "Activate a customer"
+							}
+						},
+						{
+							"name": "Deactivate Customer",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/deactivate",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "deactivate"]
+								},
+								"description": "Deactivate a customer"
+							}
+						},
+						{
+							"name": "Block Customer",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"reason\": \"Payment issues\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/block",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "block"]
+								},
+								"description": "Block a customer"
+							}
+						},
+						{
+							"name": "Unblock Customer",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/unblock",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "unblock"]
+								},
+								"description": "Unblock a customer"
+							}
+						}
+					]
+				},
+				{
+					"name": "Contacts",
+					"description": "Customer contact management",
+					"item": [
+						{
+							"name": "Add Contact",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = pm.response.json();",
+											"if (jsonData.id) {",
+											"    pm.environment.set('contact_id', jsonData.id);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"John Smith\",\n    \"email\": \"john.smith@acme.com\",\n    \"phone\": \"+60123456789\",\n    \"title\": \"Chief Technology Officer\",\n    \"department\": \"Technology\",\n    \"is_primary\": true\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/contacts",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "contacts"]
+								},
+								"description": "Add a contact to a customer"
+							}
+						},
+						{
+							"name": "List Contacts",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/contacts",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "contacts"]
+								},
+								"description": "List all contacts for a customer"
+							}
+						},
+						{
+							"name": "Get Contact",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/contacts/{{contact_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "contacts", "{{contact_id}}"]
+								},
+								"description": "Get contact details"
+							}
+						},
+						{
+							"name": "Update Contact",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"title\": \"VP of Engineering\",\n    \"phone\": \"+60198765432\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/contacts/{{contact_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "contacts", "{{contact_id}}"]
+								},
+								"description": "Update contact information"
+							}
+						},
+						{
+							"name": "Delete Contact",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/contacts/{{contact_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "contacts", "{{contact_id}}"]
+								},
+								"description": "Delete a contact"
+							}
+						},
+						{
+							"name": "Set Primary Contact",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/contacts/{{contact_id}}/primary",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "contacts", "{{contact_id}}", "primary"]
+								},
+								"description": "Set a contact as the primary contact"
+							}
+						}
+					]
+				},
+				{
+					"name": "Notes",
+					"description": "Customer notes management",
+					"item": [
+						{
+							"name": "Add Note",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = pm.response.json();",
+											"if (jsonData.id) {",
+											"    pm.environment.set('note_id', jsonData.id);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"content\": \"Had a productive meeting with the customer about their expansion plans. They are interested in upgrading to the enterprise plan.\",\n    \"type\": \"meeting\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/notes",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "notes"]
+								},
+								"description": "Add a note to a customer"
+							}
+						},
+						{
+							"name": "List Notes",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/notes",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "notes"]
+								},
+								"description": "List all notes for a customer"
+							}
+						},
+						{
+							"name": "Get Note",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/notes/{{note_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "notes", "{{note_id}}"]
+								},
+								"description": "Get note details"
+							}
+						},
+						{
+							"name": "Update Note",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"content\": \"Updated note content with additional details.\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/notes/{{note_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "notes", "{{note_id}}"]
+								},
+								"description": "Update note content"
+							}
+						},
+						{
+							"name": "Delete Note",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/notes/{{note_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "notes", "{{note_id}}"]
+								},
+								"description": "Delete a note"
+							}
+						},
+						{
+							"name": "Pin Note",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/notes/{{note_id}}/pin",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "notes", "{{note_id}}", "pin"]
+								},
+								"description": "Pin a note to the top"
+							}
+						},
+						{
+							"name": "Unpin Note",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/notes/{{note_id}}/pin",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "notes", "{{note_id}}", "pin"]
+								},
+								"description": "Unpin a note"
+							}
+						}
+					]
+				},
+				{
+					"name": "Activities",
+					"description": "Customer activity tracking",
+					"item": [
+						{
+							"name": "Log Activity",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"type\": \"call\",\n    \"title\": \"Follow-up call\",\n    \"description\": \"Discussed pricing options and next steps\",\n    \"duration_minutes\": 30,\n    \"outcome\": \"positive\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/activities",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "activities"]
+								},
+								"description": "Log an activity for a customer"
+							}
+						},
+						{
+							"name": "List Activities",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/activities?page=1&per_page=20",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "activities"],
+									"query": [
+										{"key": "page", "value": "1"},
+										{"key": "per_page", "value": "20"},
+										{"key": "type", "value": "", "disabled": true}
+									]
+								},
+								"description": "List all activities for a customer"
+							}
+						},
+						{
+							"name": "Get Activity",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/activities/{{activity_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "activities", "{{activity_id}}"]
+								},
+								"description": "Get activity details"
+							}
+						}
+					]
+				},
+				{
+					"name": "Segments",
+					"description": "Customer segmentation",
+					"item": [
+						{
+							"name": "Create Segment",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = pm.response.json();",
+											"if (jsonData.id) {",
+											"    pm.environment.set('segment_id', jsonData.id);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Enterprise Customers\",\n    \"description\": \"Customers with annual contract value > RM 100,000\",\n    \"type\": \"dynamic\",\n    \"criteria\": {\n        \"rules\": [\n            {\n                \"field\": \"total_value\",\n                \"operator\": \"greater_than\",\n                \"value\": 100000\n            },\n            {\n                \"field\": \"status\",\n                \"operator\": \"equals\",\n                \"value\": \"active\"\n            }\n        ],\n        \"match\": \"all\"\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/segments",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "segments"]
+								},
+								"description": "Create a customer segment"
+							}
+						},
+						{
+							"name": "List Segments",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/segments",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "segments"]
+								},
+								"description": "List all segments"
+							}
+						},
+						{
+							"name": "Get Segment",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/segments/{{segment_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "segments", "{{segment_id}}"]
+								},
+								"description": "Get segment details"
+							}
+						},
+						{
+							"name": "Update Segment",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Enterprise Customers - Updated\",\n    \"description\": \"Updated criteria\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/segments/{{segment_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "segments", "{{segment_id}}"]
+								},
+								"description": "Update segment"
+							}
+						},
+						{
+							"name": "Delete Segment",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/segments/{{segment_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "segments", "{{segment_id}}"]
+								},
+								"description": "Delete a segment"
+							}
+						},
+						{
+							"name": "Refresh Segment",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/segments/{{segment_id}}/refresh",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "segments", "{{segment_id}}", "refresh"]
+								},
+								"description": "Refresh segment membership for dynamic segments"
+							}
+						},
+						{
+							"name": "Get Segment Customers",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/segments/{{segment_id}}/customers",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "segments", "{{segment_id}}", "customers"]
+								},
+								"description": "Get all customers in a segment"
+							}
+						},
+						{
+							"name": "Add Customer to Segment",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/segments/{{segment_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "segments", "{{segment_id}}"]
+								},
+								"description": "Manually add a customer to a segment"
+							}
+						},
+						{
+							"name": "Remove Customer from Segment",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/customers/{{customer_id}}/segments/{{segment_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "customers", "{{customer_id}}", "segments", "{{segment_id}}"]
+								},
+								"description": "Remove a customer from a segment"
+							}
+						}
+					]
+				},
+				{
+					"name": "Import",
+					"description": "Bulk customer import",
+					"item": [
+						{
+							"name": "Import Customers",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "file",
+											"type": "file",
+											"src": ""
+										},
+										{
+											"key": "mapping",
+											"value": "{\"name\": \"Company Name\", \"email\": \"Email\", \"phone\": \"Phone Number\"}",
+											"type": "text"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/imports",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "imports"]
+								},
+								"description": "Import customers from CSV file"
+							}
+						},
+						{
+							"name": "List Imports",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/imports",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "imports"]
+								},
+								"description": "List all import jobs"
+							}
+						},
+						{
+							"name": "Get Import Status",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/imports/{{import_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "imports", "{{import_id}}"]
+								},
+								"description": "Get import job status"
+							}
+						},
+						{
+							"name": "Get Import Errors",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/imports/{{import_id}}/errors",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "imports", "{{import_id}}", "errors"]
+								},
+								"description": "Get errors from an import job"
+							}
+						},
+						{
+							"name": "Cancel Import",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/imports/{{import_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "imports", "{{import_id}}"]
+								},
+								"description": "Cancel a running import job"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Sales Service",
+			"description": "Sales pipeline management - Leads, Opportunities, Deals, and Pipelines",
+			"item": [
+				{
+					"name": "Leads",
+					"description": "Lead management",
+					"item": [
+						{
+							"name": "Create Lead",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = pm.response.json();",
+											"if (jsonData.id) {",
+											"    pm.environment.set('lead_id', jsonData.id);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"first_name\": \"Jane\",\n    \"last_name\": \"Smith\",\n    \"email\": \"jane.smith@example.com\",\n    \"phone\": \"+60123456789\",\n    \"company\": \"Tech Startup Sdn Bhd\",\n    \"title\": \"Marketing Director\",\n    \"source\": \"website\",\n    \"industry\": \"Technology\",\n    \"website\": \"https://techstartup.com\",\n    \"notes\": \"Interested in enterprise plan\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads"]
+								},
+								"description": "Create a new lead"
+							}
+						},
+						{
+							"name": "List Leads",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads?page=1&per_page=20",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads"],
+									"query": [
+										{"key": "page", "value": "1"},
+										{"key": "per_page", "value": "20"},
+										{"key": "status", "value": "", "disabled": true},
+										{"key": "source", "value": "", "disabled": true},
+										{"key": "score_label", "value": "", "disabled": true},
+										{"key": "owner_id", "value": "", "disabled": true},
+										{"key": "search", "value": "", "disabled": true}
+									]
+								},
+								"description": "List and filter leads"
+							}
+						},
+						{
+							"name": "Get Lead Statistics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/statistics",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "statistics"]
+								},
+								"description": "Get lead statistics and metrics"
+							}
+						},
+						{
+							"name": "Get Leads by Owner",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/by-owner/{{user_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "by-owner", "{{user_id}}"]
+								},
+								"description": "Get leads assigned to a specific owner"
+							}
+						},
+						{
+							"name": "Get High-Score Leads",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/high-score",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "high-score"]
+								},
+								"description": "Get leads with high scores (hot leads)"
+							}
+						},
+						{
+							"name": "Get Unassigned Leads",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/unassigned",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "unassigned"]
+								},
+								"description": "Get leads without an owner"
+							}
+						},
+						{
+							"name": "Get Stale Leads",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/stale?days=30",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "stale"],
+									"query": [
+										{"key": "days", "value": "30"}
+									]
+								},
+								"description": "Get leads with no activity for specified days"
+							}
+						},
+						{
+							"name": "Get Lead",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/{{lead_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "{{lead_id}}"]
+								},
+								"description": "Get lead details"
+							}
+						},
+						{
+							"name": "Update Lead",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"status\": \"contacted\",\n    \"notes\": \"Followed up via email on 2024-01-15\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/{{lead_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "{{lead_id}}"]
+								},
+								"description": "Update lead information"
+							}
+						},
+						{
+							"name": "Delete Lead",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/{{lead_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "{{lead_id}}"]
+								},
+								"description": "Delete a lead"
+							}
+						},
+						{
+							"name": "Qualify Lead",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"score\": 85,\n    \"notes\": \"High potential - enterprise customer with budget\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/{{lead_id}}/qualify",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "{{lead_id}}", "qualify"]
+								},
+								"description": "Qualify a lead"
+							}
+						},
+						{
+							"name": "Disqualify Lead",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"reason\": \"budget_constraints\",\n    \"notes\": \"Customer indicated they don't have budget this year\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/{{lead_id}}/disqualify",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "{{lead_id}}", "disqualify"]
+								},
+								"description": "Disqualify a lead"
+							}
+						},
+						{
+							"name": "Convert Lead",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"create_customer\": true,\n    \"create_opportunity\": true,\n    \"opportunity_name\": \"Enterprise CRM Implementation\",\n    \"opportunity_value\": 50000\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/{{lead_id}}/convert",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "{{lead_id}}", "convert"]
+								},
+								"description": "Convert lead to customer and/or opportunity"
+							}
+						},
+						{
+							"name": "Reactivate Lead",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/{{lead_id}}/reactivate",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "{{lead_id}}", "reactivate"]
+								},
+								"description": "Reactivate a disqualified lead"
+							}
+						},
+						{
+							"name": "Assign Lead",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"owner_id\": \"{{user_id}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/{{lead_id}}/assign",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "{{lead_id}}", "assign"]
+								},
+								"description": "Assign lead to a user"
+							}
+						},
+						{
+							"name": "Unassign Lead",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/{{lead_id}}/assign",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "{{lead_id}}", "assign"]
+								},
+								"description": "Remove lead assignment"
+							}
+						},
+						{
+							"name": "Bulk Assign Leads",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"lead_ids\": [\"lead-1\", \"lead-2\", \"lead-3\"],\n    \"owner_id\": \"{{user_id}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/bulk/assign",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "bulk", "assign"]
+								},
+								"description": "Bulk assign multiple leads"
+							}
+						},
+						{
+							"name": "Bulk Update Lead Status",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"lead_ids\": [\"lead-1\", \"lead-2\"],\n    \"status\": \"contacted\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/bulk/status",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "bulk", "status"]
+								},
+								"description": "Bulk update lead status"
+							}
+						},
+						{
+							"name": "Bulk Delete Leads",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"lead_ids\": [\"lead-1\", \"lead-2\"]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/leads/bulk",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "leads", "bulk"]
+								},
+								"description": "Bulk delete multiple leads"
+							}
+						}
+					]
+				},
+				{
+					"name": "Opportunities",
+					"description": "Opportunity management",
+					"item": [
+						{
+							"name": "Create Opportunity",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = pm.response.json();",
+											"if (jsonData.id) {",
+											"    pm.environment.set('opportunity_id', jsonData.id);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Enterprise CRM Implementation\",\n    \"customer_id\": \"{{customer_id}}\",\n    \"value\": 75000,\n    \"stage_id\": \"{{stage_id}}\",\n    \"probability\": 60,\n    \"expected_close_date\": \"2024-06-30\",\n    \"notes\": \"Large enterprise deal with potential for expansion\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities"]
+								},
+								"description": "Create a new opportunity"
+							}
+						},
+						{
+							"name": "List Opportunities",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities?page=1&per_page=20",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities"],
+									"query": [
+										{"key": "page", "value": "1"},
+										{"key": "per_page", "value": "20"},
+										{"key": "status", "value": "", "disabled": true},
+										{"key": "stage_id", "value": "", "disabled": true},
+										{"key": "pipeline_id", "value": "", "disabled": true},
+										{"key": "customer_id", "value": "", "disabled": true},
+										{"key": "owner_id", "value": "", "disabled": true},
+										{"key": "value_min", "value": "", "disabled": true},
+										{"key": "value_max", "value": "", "disabled": true}
+									]
+								},
+								"description": "List and filter opportunities"
+							}
+						},
+						{
+							"name": "Get Opportunity Statistics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities/statistics",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities", "statistics"]
+								},
+								"description": "Get opportunity statistics"
+							}
+						},
+						{
+							"name": "Get Pipeline Value",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities/pipeline-value",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities", "pipeline-value"]
+								},
+								"description": "Get total pipeline value"
+							}
+						},
+						{
+							"name": "Get Closing This Month",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities/closing-this-month",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities", "closing-this-month"]
+								},
+								"description": "Get opportunities closing this month"
+							}
+						},
+						{
+							"name": "Get Overdue Opportunities",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities/overdue",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities", "overdue"]
+								},
+								"description": "Get overdue opportunities"
+							}
+						},
+						{
+							"name": "Get Opportunity",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities/{{opportunity_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities", "{{opportunity_id}}"]
+								},
+								"description": "Get opportunity details"
+							}
+						},
+						{
+							"name": "Update Opportunity",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"value\": 85000,\n    \"probability\": 75,\n    \"notes\": \"Value increased after scope expansion\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities/{{opportunity_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities", "{{opportunity_id}}"]
+								},
+								"description": "Update opportunity"
+							}
+						},
+						{
+							"name": "Delete Opportunity",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities/{{opportunity_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities", "{{opportunity_id}}"]
+								},
+								"description": "Delete an opportunity"
+							}
+						},
+						{
+							"name": "Move Opportunity Stage",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"stage_id\": \"{{stage_id}}\",\n    \"position\": 2\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities/{{opportunity_id}}/move-stage",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities", "{{opportunity_id}}", "move-stage"]
+								},
+								"description": "Move opportunity to a different stage"
+							}
+						},
+						{
+							"name": "Win Opportunity",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"actual_close_date\": \"2024-05-15\",\n    \"notes\": \"Closed after successful demo and negotiation\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities/{{opportunity_id}}/win",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities", "{{opportunity_id}}", "win"]
+								},
+								"description": "Mark opportunity as won"
+							}
+						},
+						{
+							"name": "Lose Opportunity",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"reason\": \"competitor_selected\",\n    \"notes\": \"Lost to competitor X due to pricing\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities/{{opportunity_id}}/lose",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities", "{{opportunity_id}}", "lose"]
+								},
+								"description": "Mark opportunity as lost"
+							}
+						},
+						{
+							"name": "Reopen Opportunity",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities/{{opportunity_id}}/reopen",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities", "{{opportunity_id}}", "reopen"]
+								},
+								"description": "Reopen a closed opportunity"
+							}
+						},
+						{
+							"name": "Get Stage History",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/opportunities/{{opportunity_id}}/stage-history",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "opportunities", "{{opportunity_id}}", "stage-history"]
+								},
+								"description": "Get opportunity stage history"
+							}
+						}
+					]
+				},
+				{
+					"name": "Pipelines",
+					"description": "Sales pipeline configuration",
+					"item": [
+						{
+							"name": "Create Pipeline",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = pm.response.json();",
+											"if (jsonData.id) {",
+											"    pm.environment.set('pipeline_id', jsonData.id);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Enterprise Sales\",\n    \"description\": \"Pipeline for enterprise deals\",\n    \"type\": \"opportunity\",\n    \"is_default\": false\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines"]
+								},
+								"description": "Create a new pipeline"
+							}
+						},
+						{
+							"name": "List Pipelines",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines"]
+								},
+								"description": "List all pipelines"
+							}
+						},
+						{
+							"name": "Get Default Pipeline",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/default",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "default"]
+								},
+								"description": "Get the default pipeline"
+							}
+						},
+						{
+							"name": "Get Pipeline",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}"]
+								},
+								"description": "Get pipeline details"
+							}
+						},
+						{
+							"name": "Update Pipeline",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Enterprise Sales v2\",\n    \"description\": \"Updated pipeline description\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}"]
+								},
+								"description": "Update pipeline"
+							}
+						},
+						{
+							"name": "Delete Pipeline",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}"]
+								},
+								"description": "Delete a pipeline"
+							}
+						},
+						{
+							"name": "Activate Pipeline",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}/activate",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}", "activate"]
+								},
+								"description": "Activate a pipeline"
+							}
+						},
+						{
+							"name": "Deactivate Pipeline",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}/deactivate",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}", "deactivate"]
+								},
+								"description": "Deactivate a pipeline"
+							}
+						},
+						{
+							"name": "Set Default Pipeline",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}/set-default",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}", "set-default"]
+								},
+								"description": "Set pipeline as default"
+							}
+						},
+						{
+							"name": "Clone Pipeline",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Enterprise Sales (Copy)\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}/clone",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}", "clone"]
+								},
+								"description": "Clone an existing pipeline"
+							}
+						},
+						{
+							"name": "Get Pipeline Statistics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}/statistics",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}", "statistics"]
+								},
+								"description": "Get pipeline statistics"
+							}
+						},
+						{
+							"name": "Get Pipeline Velocity",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}/velocity",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}", "velocity"]
+								},
+								"description": "Get pipeline velocity metrics"
+							}
+						},
+						{
+							"name": "Get Conversion Rates",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}/conversion-rates",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}", "conversion-rates"]
+								},
+								"description": "Get stage conversion rates"
+							}
+						},
+						{
+							"name": "Get Pipeline Forecast",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}/forecast",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}", "forecast"]
+								},
+								"description": "Get pipeline forecast"
+							}
+						},
+						{
+							"name": "Add Stage",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = pm.response.json();",
+											"if (jsonData.id) {",
+											"    pm.environment.set('stage_id', jsonData.id);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Negotiation\",\n    \"position\": 3,\n    \"color\": \"#F59E0B\",\n    \"probability\": 60\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}/stages",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}", "stages"]
+								},
+								"description": "Add a stage to a pipeline"
+							}
+						},
+						{
+							"name": "Update Stage",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Contract Review\",\n    \"color\": \"#10B981\",\n    \"probability\": 80\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}/stages/{{stage_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}", "stages", "{{stage_id}}"]
+								},
+								"description": "Update a pipeline stage"
+							}
+						},
+						{
+							"name": "Delete Stage",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}/stages/{{stage_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}", "stages", "{{stage_id}}"]
+								},
+								"description": "Delete a pipeline stage"
+							}
+						},
+						{
+							"name": "Reorder Stages",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"stage_ids\": [\"stage-1\", \"stage-2\", \"stage-3\", \"stage-4\"]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/sales/pipelines/{{pipeline_id}}/stages/reorder",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "sales", "pipelines", "{{pipeline_id}}", "stages", "reorder"]
+								},
+								"description": "Reorder pipeline stages"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Notification Service",
+			"description": "Notification management and delivery",
+			"item": [
+				{
+					"name": "Notifications",
+					"description": "Notification endpoints",
+					"item": [
+						{
+							"name": "List Notifications",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/notifications?page=1&per_page=20",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "notifications"],
+									"query": [
+										{"key": "page", "value": "1"},
+										{"key": "per_page", "value": "20"},
+										{"key": "status", "value": "", "disabled": true},
+										{"key": "type", "value": "", "disabled": true}
+									]
+								},
+								"description": "List notifications"
+							}
+						},
+						{
+							"name": "Get Notification",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/notifications/{{notification_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "notifications", "{{notification_id}}"]
+								},
+								"description": "Get notification details"
+							}
+						}
+					]
+				},
+				{
+					"name": "Templates",
+					"description": "Notification templates",
+					"item": [
+						{
+							"name": "List Templates",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/notifications/templates",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "notifications", "templates"]
+								},
+								"description": "List notification templates"
+							}
+						},
+						{
+							"name": "Create Template",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Welcome Email\",\n    \"type\": \"email\",\n    \"subject\": \"Welcome to CRM Kilang Desa Murni Batik!\",\n    \"body\": \"<h1>Welcome, {{name}}!</h1><p>We're excited to have you on board.</p>\",\n    \"variables\": [\"name\", \"company\"]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/notifications/templates",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "notifications", "templates"]
+								},
+								"description": "Create a notification template"
+							}
+						},
+						{
+							"name": "Get Template",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/notifications/templates/{{template_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "notifications", "templates", "{{template_id}}"]
+								},
+								"description": "Get template details"
+							}
+						},
+						{
+							"name": "Update Template",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"subject\": \"Welcome to Our CRM Platform!\",\n    \"body\": \"<h1>Hello, {{name}}!</h1><p>Welcome aboard!</p>\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/notifications/templates/{{template_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "notifications", "templates", "{{template_id}}"]
+								},
+								"description": "Update a template"
+							}
+						},
+						{
+							"name": "Delete Template",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/notifications/templates/{{template_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "notifications", "templates", "{{template_id}}"]
+								},
+								"description": "Delete a template"
+							}
+						}
+					]
+				},
+				{
+					"name": "Send",
+					"description": "Direct notification sending (internal use)",
+					"item": [
+						{
+							"name": "Send Email",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"to\": \"user@example.com\",\n    \"template_id\": \"{{template_id}}\",\n    \"variables\": {\n        \"name\": \"John Doe\",\n        \"company\": \"Acme Corp\"\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/notifications/send/email",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "notifications", "send", "email"]
+								},
+								"description": "Queue an email for sending"
+							}
+						},
+						{
+							"name": "Send SMS",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"to\": \"+60123456789\",\n    \"message\": \"Your verification code is: 123456\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/notifications/send/sms",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "notifications", "send", "sms"]
+								},
+								"description": "Queue an SMS for sending"
+							}
+						}
+					]
+				}
+			]
+		}
+	]
+}

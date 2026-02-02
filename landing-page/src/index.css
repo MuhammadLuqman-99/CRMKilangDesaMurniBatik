@@ -1,0 +1,21 @@
+/* Base styles - minimal reset */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    margin: 0;
+    min-width: 320px;
+}
+
+#root {
+    width: 100%;
+}

@@ -146,42 +146,48 @@ Phase 9 focuses on building the missing user-facing components that transform th
 
 ---
 
-## 9.3 Legal & Compliance (Wajib untuk SaaS)
+## 9.3 Legal & Compliance (Wajib untuk SaaS) ✅
 
-### Terms of Service (ToS)
+### Terms of Service (ToS) ✅
 
-- [ ] Draft comprehensive terms of service
-  - [ ] Service description
-  - [ ] User responsibilities
-  - [ ] Payment terms
-  - [ ] Data usage terms
-  - [ ] Termination clause
-  - [ ] Limitation of liability
+- [x] Draft comprehensive terms of service
+  - [x] Service description
+  - [x] User responsibilities
+  - [x] Payment terms
+  - [x] Data usage terms
+  - [x] Termination clause
+  - [x] Limitation of liability
 - [ ] Legal review (recommended)
-- [ ] Publish to `/terms` route
+- [x] Publish to `/terms` route
 
-### Privacy Policy
+> **Implementation Details**: See `docs/legal/terms-of-service.md`. Comprehensive 13-section document covering service description, user responsibilities, payment terms, data usage, intellectual property, termination, limitation of liability, and dispute resolution.
 
-- [ ] Draft privacy policy
-  - [ ] Data collection practices
-  - [ ] How data is used
-  - [ ] Data retention policy
-  - [ ] User rights (access, deletion, portability)
-  - [ ] Cookie usage
-  - [ ] Third-party services
-- [ ] PDPA (Malaysia) compliance
-- [ ] GDPR compliance (if serving EU)
-- [ ] Publish to `/privacy` route
+### Privacy Policy ✅
 
-### Service Level Agreement (SLA)
+- [x] Draft privacy policy
+  - [x] Data collection practices
+  - [x] How data is used
+  - [x] Data retention policy
+  - [x] User rights (access, deletion, portability)
+  - [x] Cookie usage
+  - [x] Third-party services
+- [x] PDPA (Malaysia) compliance
+- [x] GDPR compliance (if serving EU)
+- [x] Publish to `/privacy` route
 
-- [ ] Define SLA document
-  - [ ] Uptime guarantee (e.g., 99.9%)
-  - [ ] Maintenance windows
-  - [ ] Support response times
-  - [ ] Incident notification process
-  - [ ] Credits/compensation for downtime
-- [ ] Publish to `/sla` route
+> **Implementation Details**: See `docs/legal/privacy-policy.md`. Comprehensive 17-section document covering data collection, usage, retention, user rights (access, rectification, deletion, portability), PDPA and GDPR compliance, with detailed tables for cookies, data sharing, and legal bases.
+
+### Service Level Agreement (SLA) ✅
+
+- [x] Define SLA document
+  - [x] Uptime guarantee (e.g., 99.9%)
+  - [x] Maintenance windows
+  - [x] Support response times
+  - [x] Incident notification process
+  - [x] Credits/compensation for downtime
+- [x] Publish to `/sla` route
+
+> **Implementation Details**: See `docs/legal/sla.md`. Comprehensive 15-section document with tiered uptime guarantees (99.9%-99.99%), support response times by plan, incident notification process, service credits calculation, performance benchmarks, and escalation procedures.
 
 ---
 
@@ -246,9 +252,9 @@ Phase 9 focuses on building the missing user-facing components that transform th
 |---------|-------------|-----------|----------|
 | 9.1 Frontend Applications | 47 | 45 | ✅ 96% |
 | 9.2 Onboarding & Documentation | 20 | 19 | ✅ 95% |
-| 9.3 Legal & Compliance | 15 | 0 | ⏳ 0% |
+| 9.3 Legal & Compliance | 15 | 14 | ✅ 93% |
 | 9.4 Operational Readiness | 20 | 0 | ⏳ 0% |
-| **Total** | **102** | **64** | **63%** |
+| **Total** | **102** | **78** | **76%** |
 
 ---
 
@@ -256,7 +262,7 @@ Phase 9 focuses on building the missing user-facing components that transform th
 
 1. **High Priority** — Complete before public launch
    - ~~CRM Web Client (Login, Dashboard, Basic CRUD)~~ ✅ DONE
-   - Terms of Service & Privacy Policy
+   - ~~Terms of Service & Privacy Policy~~ ✅ DONE
    - Support Email Setup
 
 2. **Medium Priority** — Complete within 2 weeks of launch
@@ -275,19 +281,21 @@ Phase 9 focuses on building the missing user-facing components that transform th
 ## Notes
 
 > [!SUCCESS]
-> Phase 9.1 (Frontend Applications) and 9.2 (Onboarding & Documentation) are now complete! The system has:
+> Phase 9.1 (Frontend Applications), 9.2 (Onboarding & Documentation), and 9.3 (Legal & Compliance) are now complete! The system has:
 > - Admin Dashboard & CRM Web Client
 > - JavaScript/TypeScript SDK
 > - Complete Postman Collection (214 endpoints)
 > - User Manual (5 chapters)
 > - Marketing Landing Page
+> - Terms of Service, Privacy Policy, and SLA documents
+> - HTTP handlers for `/terms`, `/privacy`, and `/sla` routes
 
 > [!IMPORTANT]
-> Next priorities: Legal documents (ToS, Privacy Policy, SLA) and operational infrastructure (Status Page, Support Channels) before public launch.
+> Next priorities: Operational infrastructure (Status Page, Support Channels, Billing Integration) before public launch.
 
 > [!CAUTION]
 > Legal documents (ToS, Privacy Policy) should be reviewed by a legal professional before publishing.
 
 ---
 
-**Last Updated**: 2026-02-02
+**Last Updated**: 2026-02-03
